@@ -1,0 +1,8 @@
+1: function formatDateDDMMYYYY(dateObj) {
+45: const dStr = formatDateDDMMYYYY(dateObj);
+535: createdAt: formatDateDDMMYYYY(new Date()),
+993: createdAt: formatDateDDMMYYYY(new Date()),
+1168: createdAt: formatDateDDMMYYYY(new Date()),
+1781: const dateOnly = inv.date || formatDateDDMMYYYY(new Date());
+2693: createdAt: formatDateDDMMYYYY(new Date()),
+2911: const dateOnly = sr.returnDate ? formatDateDDMMYYYY(sr.returnDate) : sr.createdAt;

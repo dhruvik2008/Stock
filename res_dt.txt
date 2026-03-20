@@ -1,0 +1,6 @@
+43: function formatDateTime(dateObj) {
+994: createdTime: formatDateTime(new Date()),
+1731: createdAt: formatDateTime(new Date()),
+1780: const createdAt = inv.createdAt || formatDateTime(new Date());
+2185: createdAt: formatDateTime(new Date())
+2694: createdTime: formatDateTime(new Date()),

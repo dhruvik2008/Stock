@@ -1,0 +1,36 @@
+486: createdAt: new Date().toLocaleDateString('en-IN'),
+711: const now = new Date();
+942: date: document.getElementById('challanDate').value,
+944: createdAt: new Date().toLocaleDateString('en-IN'),
+945: createdTime: new Date().toLocaleString('en-IN'),
+987: <div style="font-size:12px;color:#8A95A3;margin-top:3px">${c.customerName} • ${c.createdAt}</div>
+1119: createdAt: new Date().toLocaleDateString('en-IN'),
+1484: document.getElementById('cdCreatedAt').textContent = c.createdTime || c.createdAt;
+1572: const now = new Date();
+1671: date: document.getElementById('invDate').value,
+1682: createdAt: new Date().toLocaleString('en-IN'),
+1731: const createdAt = inv.createdAt || new Date().toLocaleString('en-IN');
+1732: const dateOnly = inv.date || new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+1996: const now = new Date();
+2136: createdAt: new Date().toLocaleString()
+2469: const now = new Date();
+2471: document.getElementById('srReturnDate').value =
+2637: billDate: document.getElementById('srBillDate').value,
+2642: returnDate: document.getElementById('srReturnDate').value,
+2644: createdAt: new Date().toLocaleDateString('en-IN'),
+2645: createdTime: new Date().toLocaleString('en-IN'),
+2688: <div style="font-size:12px;color:#8A95A3;margin-top:3px">${sr.customerName} • ${sr.createdAt}</div>
+2740: document.getElementById('srdCreatedAt').textContent = sr.createdTime || sr.createdAt;
+2838: const now = new Date();
+2862: const dateOnly = sr.returnDate ? new Date(sr.returnDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : sr.createdAt;
+2945: <div class="meta-cell">Bill Date:<br/><strong>${sr.billDate || '-'}</strong></div>
+3061: <div style="font-size:12px;color:#888">${c.customerName} • ${c.createdAt}</div>
+3118: date: sr.returnDate || sr.createdAt,
+3174: date: sr.returnDate || sr.createdAt,
+3344: link.setAttribute("download", `Live_Stock_Report_${new Date().getTime()}.csv`);
+3418: dateStr: p.createdAt || p.packDate, // Assuming ISO or DD-MMM-YYYY
+3419: rawDate: new Date(p.createdAt || p.packDate || Date.now()),
+3436: dateStr: c.createdAt || c.date,
+3437: rawDate: new Date(c.createdAt || c.date || Date.now()),
+3454: dateStr: sr.createdAt || sr.returnDate,
+3455: rawDate: new Date(sr.createdAt || sr.returnDate || Date.now()),

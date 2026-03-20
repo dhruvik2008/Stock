@@ -1,0 +1,20 @@
+function goToDashboard() {
+    const user = localStorage.getItem('vastra_currentUser') || 'Admin';
+    document.getElementById('authWrapper').style.display = 'none';
+    document.getElementById('dashboardWrapper').style.display = 'flex';
+    document.getElementById('navUserName').textContent = user;
+
+    applyPermissions();
+    if (user === 'Vishal' || user === 'Piyush') {
+        renderPermissionsTable();
+    }
+
+    renderDesignsTable();
+    updateStats();
+}
+
+// Allow Enter key on sign-in fields
+document.addEventListener('DOMContentLoaded', () => {
+    ['siEmail', 'siPassword'].forEach(id => {
+        document.getElementById(id)?.addEventListener('keydown', e => {
+       
