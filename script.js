@@ -3148,10 +3148,21 @@ showSection = function (id, el) {
     if (id === 'analysisSection') {
         changeAnalysisTab('top');
     }
+    if (id === 'returnAnalysisSection') {
+        changeReturnTab('customer');
+    }
 };
 
 // ═════════════════════ ANALYSIS LOGIC ═══════════════════════
+let currentAnalysisTab = 'top';
+
+function refreshAnalysis() {
+    showToast('Calculating reports...');
+    changeAnalysisTab(currentAnalysisTab);
+}
+
 function changeAnalysisTab(tab) {
+    currentAnalysisTab = tab;
     // Reset tabs
     ['Top', 'Low', 'Customer'].forEach(t => {
         const el = document.getElementById('tab' + t);
@@ -3167,10 +3178,32 @@ function changeAnalysisTab(tab) {
     });
 
     const area = document.getElementById('analysisContentArea');
-    const challansData = JSON.parse(localStorage.getItem('vastra_challans') || '[]');
-    const packsData = JSON.parse(localStorage.getItem('vastra_packs') || '[]');
-    const srData = JSON.parse(localStorage.getItem('vastra_salesReturns') || '[]');
-    const designsList = designs;
+    let challansData = JSON.parse(localStorage.getItem('vastra_challans') || '[]');
+    let packsData = JSON.parse(localStorage.getItem('vastra_packs') || '[]');
+    let srData = JSON.parse(localStorage.getItem('vastra_salesReturns') || '[]');
+    
+    // Date Filtering
+    const startVal = document.getElementById('analysisStart')?.value;
+    const endVal = document.getElementById('analysisEnd')?.value;
+    
+    if (startVal || endVal) {
+        const start = startVal ? new Date(startVal + 'T00:00:00') : null;
+        const end = endVal ? new Date(endVal + 'T23:59:59') : null;
+
+        const filterDateFn = (item) => {
+            const dateStr = item.date || item.dateTime || item.returnDate || item.createdAt;
+            if (!dateStr) return true;
+            const itemDate = parseDateDDMMYYYY(dateStr);
+            if (start && itemDate < start) return false;
+            if (end && itemDate > end) return false;
+            return true;
+        };
+
+        challansData = challansData.filter(filterDateFn);
+        packsData = packsData.filter(filterDateFn);
+        srData = srData.filter(filterDateFn);
+    }
+    const designsList = designs.filter(d => !d.deleted);
 
     const getDesignImage = (dName) => {
         const item = designsList.find(d => d.name === dName);
@@ -4130,7 +4163,15 @@ function selectSRChallan(id) {
 /* ================================================
    RETURN ANALYSIS
 ================================================ */
+let currentReturnAnalysisTab = 'customer';
+
+function refreshReturnAnalysis() {
+    showToast('Calculating return reports...');
+    changeReturnTab(currentReturnAnalysisTab);
+}
+
 function changeReturnTab(tab) {
+    currentReturnAnalysisTab = tab;
     ['RetCustomer', 'RetDesign'].forEach(t => {
         const el = document.getElementById('tab' + t);
         if (el) {
@@ -4141,7 +4182,26 @@ function changeReturnTab(tab) {
     });
 
     const area = document.getElementById('returnContentArea');
-    const srData = JSON.parse(localStorage.getItem('vastra_salesReturns') || '[]');
+    let srData = JSON.parse(localStorage.getItem('vastra_salesReturns') || '[]');
+    
+    // Date Filtering
+    const startVal = document.getElementById('returnAnalysisStart')?.value;
+    const endVal = document.getElementById('returnAnalysisEnd')?.value;
+    
+    if (startVal || endVal) {
+        const start = startVal ? new Date(startVal + 'T00:00:00') : null;
+        const end = endVal ? new Date(endVal + 'T23:59:59') : null;
+        
+        srData = srData.filter(sr => {
+            const dateStr = sr.returnDate || sr.createdAt;
+            if (!dateStr) return true;
+            const itemDate = parseDateDDMMYYYY(dateStr);
+            if (start && itemDate < start) return false;
+            if (end && itemDate > end) return false;
+            return true;
+        });
+    }
+
     const designsList = designs.filter(d => !d.deleted);
 
     const getDesignImage = (dName) => {
