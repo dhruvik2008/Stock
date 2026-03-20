@@ -363,6 +363,19 @@
 
                     <div
                         style="background:#fff;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,0.1);padding:14px;margin-top:14px">
+                        
+                        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:flex-end;border-bottom:1px solid #eee;padding-bottom:16px;">
+                            <div style="flex:1;min-width:140px">
+                                <label style="display:block;font-size:11px;color:#888;margin-bottom:4px">Start Date</label>
+                                <input type="date" id="analysisStart" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:4px;">
+                            </div>
+                            <div style="flex:1;min-width:140px">
+                                <label style="display:block;font-size:11px;color:#888;margin-bottom:4px">End Date</label>
+                                <input type="date" id="analysisEnd" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:4px;">
+                            </div>
+                            <button onclick="refreshAnalysis()" style="background:#0088cc;color:#fff;border:none;padding:9px 16px;border-radius:4px;font-weight:bold;cursor:pointer;font-size:12px">GENERATE REPORT</button>
+                        </div>
+
                         <div style="display:flex;gap:8px;margin-bottom:16px;overflow-x:auto;padding-bottom:4px"
                             id="analysisTabs">
                             <button onclick="changeAnalysisTab('top')" id="tabTop"
@@ -442,6 +455,19 @@
 
                     <div
                         style="background:#fff;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,0.1);padding:14px;margin-top:14px">
+                        
+                        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:flex-end;border-bottom:1px solid #eee;padding-bottom:16px;">
+                            <div style="flex:1;min-width:140px">
+                                <label style="display:block;font-size:11px;color:#888;margin-bottom:4px">Start Date</label>
+                                <input type="date" id="returnAnalysisStart" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:4px;">
+                            </div>
+                            <div style="flex:1;min-width:140px">
+                                <label style="display:block;font-size:11px;color:#888;margin-bottom:4px">End Date</label>
+                                <input type="date" id="returnAnalysisEnd" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:4px;">
+                            </div>
+                            <button onclick="refreshReturnAnalysis()" style="background:#fb8c00;color:#fff;border:none;padding:9px 16px;border-radius:4px;font-weight:bold;cursor:pointer;font-size:12px">GENERATE REPORT</button>
+                        </div>
+
                         <div style="display:flex;gap:8px;margin-bottom:16px;overflow-x:auto;padding-bottom:4px">
                             <button onclick="changeReturnTab('customer')" id="tabRetCustomer"
                                 style="padding:8px 16px;background:#fb8c00;color:#fff;border:none;border-radius:4px;font-weight:bold;cursor:pointer;white-space:nowrap;">Customer
