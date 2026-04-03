@@ -3138,12 +3138,20 @@ function editPack(id) {
     document.getElementById('packDesignModal').style.display = 'flex';
 }
 
-// Ensure packs render on load or when switching tabs
+// Ensure lists render on load or when switching tabs
 const _originalShowSection = showSection;
 showSection = function (id, el) {
     _originalShowSection(id, el);
+    if (id === 'challansSection') {
+        challans = JSON.parse(localStorage.getItem('vastra_challans') || '[]');
+        renderChallanList();
+    }
     if (id === 'packSection') {
         renderPackList();
+    }
+    if (id === 'salesReturnSection') {
+        salesReturns = JSON.parse(localStorage.getItem('vastra_salesReturns') || '[]');
+        renderSRList();
     }
     if (id === 'analysisSection') {
         changeAnalysisTab('top');
@@ -3734,14 +3742,14 @@ function renderSRDetail(sr) {
             <table class="cd-item-table">
                 <thead><tr><th>SIZE</th><th>COLOR</th><th>QTY</th><th>RATE</th><th></th></tr></thead>
                 <tbody><tr>
-                    <td><input type="text" value="${item.size || ''}" placeholder="Size" class="cd-table-input" onchange="updateSRDItem(${idx},'size',this.value)"/></td>
-                    <td><input type="text" value="${item.color || ''}" placeholder="Color" class="cd-table-input" onchange="updateSRDItem(${idx},'color',this.value)"/></td>
-                    <td><input type="number" value="${item.qty}" class="cd-table-input" onchange="updateSRDItem(${idx},'qty',this.value)"/></td>
-                    <td><input type="number" value="${item.rate}" class="cd-table-input" onchange="updateSRDItem(${idx},'rate',this.value)"/></td>
+                    <td><input type="text" value="${item.size || ''}" placeholder="Size" class="cd-table-input" oninput="updateSRDItem(${idx},'size',this.value)"/></td>
+                    <td><input type="text" value="${item.color || ''}" placeholder="Color" class="cd-table-input" oninput="updateSRDItem(${idx},'color',this.value)"/></td>
+                    <td><input type="number" value="${item.qty}" class="cd-table-input" id="srd_qty_${idx}" oninput="updateSRDItem(${idx},'qty',this.value)"/></td>
+                    <td><input type="number" value="${item.rate || 0}" class="cd-table-input" id="srd_rate_${idx}" oninput="updateSRDItem(${idx},'rate',this.value)"/></td>
                     <td><button onclick="removeSRDItem(${idx})" style="background:none;border:none;color:#c62828;font-size:18px;cursor:pointer"><i class="fa fa-times-circle"></i></button></td>
                 </tr></tbody>
             </table>
-            <div style="padding:6px 0;font-size:13px;font-weight:600">Total: ${item.qty}</div>
+            <div id="srd_total_${idx}" style="padding:6px 0;font-size:13px;font-weight:600;color:#fb8c00">Total: ${item.qty} x Rs.${item.rate || 0} = Rs.${((item.qty||0)*(item.rate||0)).toFixed(2)}</div>
         </div>`).join('');
 }
 
@@ -3758,6 +3766,17 @@ function updateSRDItem(idx, field, val) {
     if (field === 'qty' || field === 'rate') {
         item[field] = parseFloat(val) || 0;
         item.total = item.qty * item.rate;
+        // Update the total display line live
+        const totalEl = document.getElementById(`srd_total_${idx}`);
+        if (totalEl) {
+            totalEl.textContent = `Total: ${item.qty} × ₹${item.rate || 0} = ₹${((item.qty || 0) * (item.rate || 0)).toFixed(2)}`;
+        }
+        // Update overall qty counters
+        const totalQty = currentSRDetail.items.reduce((s, i) => s + (parseFloat(i.qty) || 0), 0);
+        const totalItemsEl = document.getElementById('srdTotalItems');
+        const totalQtyEl = document.getElementById('srdTotalQty');
+        if (totalItemsEl) totalItemsEl.textContent = currentSRDetail.items.length;
+        if (totalQtyEl) totalQtyEl.textContent = totalQty;
     } else {
         item[field] = val;
     }
@@ -3779,12 +3798,14 @@ function updateSalesReturn() {
     currentSRDetail.shipping = document.getElementById('srdShipping').value;
     currentSRDetail.creditNoteNo = document.getElementById('srdCreditNoteNo').value;
     currentSRDetail.updatedBy = localStorage.getItem('vastra_currentUser') || 'Admin';
-    currentSRDetail.createdBy = localStorage.getItem('vastra_currentUser') || 'Admin';
+    currentSRDetail.updatedAt = Date.now();
     const idx = salesReturns.findIndex(sr => sr.id === currentSRDetail.id);
     if (idx !== -1) { salesReturns[idx] = { ...currentSRDetail }; }
     localStorage.setItem('vastra_salesReturns', JSON.stringify(salesReturns));
     showToast('Sales Return updated! ✅');
     renderSRList();
+    // Re-render detail so everything refreshes
+    renderSRDetail(currentSRDetail);
 }
 
 function convertSRToInvoice() {
