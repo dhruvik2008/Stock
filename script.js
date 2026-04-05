@@ -1101,7 +1101,7 @@ function getDesignStock(designIdOrName, size = null, color = null) {
     // Stock OUT: sum all challan quantities for this design+size+color
     let stockOut = 0;
     challans.forEach(c => {
-        if (c.items) {
+        if (!c.deleted && c.items) {
             c.items.forEach(item => {
                 const match = (designId && item.designId == designId) || (designName && item.designName === designName);
                 const sizeMatch = !size || item.size === size;
@@ -1155,13 +1155,15 @@ function getDesignSizeWiseStock(designIdOrName) {
     });
 
     challans.forEach(c => {
-        (c.items || []).forEach(item => {
-            const match = (designId && item.designId == designId) || (designName && item.designName === designName);
-            if (match) {
-                const s = item.size || 'No-Size';
-                sizeStock[s] = (sizeStock[s] || 0) - (parseInt(item.qty) || 0);
-            }
-        });
+        if (!c.deleted && c.items) {
+            (c.items || []).forEach(item => {
+                const match = (designId && item.designId == designId) || (designName && item.designName === designName);
+                if (match) {
+                    const s = item.size || 'No-Size';
+                    sizeStock[s] = (sizeStock[s] || 0) - (parseInt(item.qty) || 0);
+                }
+            });
+        }
     });
 
     return sizeStock;
@@ -4855,7 +4857,20 @@ function changeLSTab(tabName, el) {
         records = records.filter(r => r.type === tabName);
     }
 
-    // Sort chronologically (newest first based on date and then ID)
+    // Sort chronologically (oldest first for balance calculation)
+    records.sort((a, b) => {
+        if (a.rawDate - b.rawDate !== 0) return a.rawDate - b.rawDate;
+        return (a.id || 0) - (b.id || 0);
+    });
+
+    let runningTotal = 0;
+    records.forEach(r => {
+        if (r.sign === '+') runningTotal += r.qty;
+        else runningTotal -= r.qty;
+        r.balance = runningTotal;
+    });
+
+    // Re-sort newest first for display
     records.sort((a, b) => {
         if (b.rawDate - a.rawDate !== 0) return b.rawDate - a.rawDate;
         return (b.id || 0) - (a.id || 0);
@@ -4940,17 +4955,28 @@ function changeLSTab(tabName, el) {
                 </div>
                 
                 <div style="flex:1;">
-                    <div style="font-size:15px;color:#111;font-weight:600;margin-bottom:2px;">${ev.title || '-'}</div>
-                    <div style="margin-bottom:10px;">
+                    <div style="font-size:15px;color:#111;font-weight:600;margin-bottom:2px;">
+                        ${ev.title || '-'} ${ev.subtitle && ev.subtitle !== '-' ? ` - <span style="color:var(--blue)">${ev.subtitle}</span>` : ''}
+                    </div>
+                    <div style="margin-bottom:10px; display:flex; gap:8px; align-items:center;">
                         <span style="background:#e1f0f8; color:#0077c2; border-radius:4px; padding:3px 8px; font-size:11px; font-weight:bold; display:inline-flex; align-items:center; gap:5px; border:1px solid #b3d7ef;">
                             <i class="fa fa-user" style="font-size:10px;"></i> ${ev.createdBy.toUpperCase()}
                         </span>
+                        ${ev.subtitle && ev.subtitle !== '-' ? `
+                        <span style="background:#fff3e0; color:#e65100; border-radius:4px; padding:3px 8px; font-size:11px; font-weight:bold; display:inline-flex; align-items:center; gap:5px; border:1px solid #ffe0b2;">
+                            <i class="fa fa-building" style="font-size:10px;"></i> ${ev.subtitle.toUpperCase()}
+                        </span>` : ''}
                     </div>
                     <div style="font-size:13px;color:#888;display:flex;gap:12px;flex-wrap:wrap;">
                         <span>Design: <b>${currentLSDesign}</b></span>
                         <span style="background:#f0f0f0; padding:1px 6px; border-radius:4px; color:#333;">Size: <b>${ev.size.toUpperCase()}</b></span>
                     </div>
-                    <div style="font-size:13px;color:#888;margin-top:4px;">${ev.type === 'PACKAGED' ? 'Packed' : ev.type === 'DELIVERED' ? 'Delivery' : 'Returned'} Qty: <b>${ev.qty}</b></div>
+                    <div style="font-size:13px;color:#888;margin-top:4px;">
+                        ${ev.type === 'PACKAGED' ? 'Packed' : ev.type === 'DELIVERED' ? 'Delivery' : 'Returned'} Qty: <b>${ev.qty}</b> 
+                        <span style="color:${qtyColor}; font-weight:bold; margin-left:10px;">
+                           ${ev.sign === '+' ? '<i class="fa fa-plus-circle"></i> ADDED' : '<i class="fa fa-minus-circle"></i> MINUS'}
+                        </span>
+                    </div>
                 </div>
 
                 <div style="align-self:center;">
@@ -4959,7 +4985,7 @@ function changeLSTab(tabName, el) {
                 
                 <div style="text-align:right; min-width:80px;">
                     <div style="font-size:16px;font-weight:bold;color:${qtyColor};margin-bottom:4px;">${displayQty}</div>
-                    <div style="font-size:12px;color:#666;">Total Qty: ${displayQty}</div>
+                    <div style="font-size:12px;color:#666;background:#f5f5f5;padding:2px 4px;border-radius:4px;">Balance: <b>${ev.balance}</b></div>
                 </div>
             </div>`;
         });
