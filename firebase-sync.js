@@ -205,16 +205,27 @@ function startFirebaseListeners() {
             const fbData = snapshot.val();
             if (!fbData) return;
 
-            const localDataStr = localStorage.getItem(key) || (key.includes('supplier') ? '{}' : '[]');
             const fbDataStr = JSON.stringify(fbData);
+
+            // Optimization: If the string matches our last known local state, skip merge check
+            if (fbDataStr === _lastLocalJSON[key]) return;
+
+            const localDataStr = localStorage.getItem(key) || (key.includes('supplier') ? '{}' : '[]');
 
             // Authoritative Mirroring: If cloud data is different, adopt it entirely
             // This prevents old/deleted data from 'mixing back' (bhego thay che)
-            if (fbDataStr !== localDataStr) {
+            // But it causes auto-deletion of new items before they sync.
+            // FIXED: Using smartMerge here too.
+            const localData = JSON.parse(localDataStr);
+            const merged = smartMerge(localData, fbData);
+            const mergedStr = JSON.stringify(merged);
+
+            if (mergedStr !== localDataStr) {
                 _suppressFirebaseWrite = true;
-                localStorage.setItem(key, fbDataStr);
+                localStorage.setItem(key, mergedStr);
                 _suppressFirebaseWrite = false;
-                console.log(`✨ Automatic Sync (Mirror): ${key}`);
+                _lastLocalJSON[key] = mergedStr; // Keep cache in sync
+                console.log(`✨ Automatic Sync (Merge): ${key}`);
                 if (typeof refreshUIForKey === 'function') refreshUIForKey(key);
             }
         });
@@ -235,12 +246,16 @@ function startFirebaseListeners() {
             const localDataStr = JSON.stringify(localDesigns);
 
             // Authoritative Mirroring for Designs (IndexedDB)
-            if (fbDataStr !== localDataStr) {
+            // FIXED: Using smartMerge for designs too to prevent auto-delete
+            const merged = smartMerge(localDesigns, fbData);
+            const mergedStr = JSON.stringify(merged);
+
+            if (mergedStr !== localDataStr) {
                 _suppressFirebaseWrite = true;
-                _lastLocalJSON['vastra_designs'] = fbDataStr;
-                await VastraDB.saveAll(fbData);
+                _lastLocalJSON['vastra_designs'] = mergedStr;
+                await VastraDB.saveAll(merged);
                 _suppressFirebaseWrite = false;
-                console.log(`✨ Automatic Sync (Mirror): vastra_designs`);
+                console.log(`✨ Automatic Sync (Merge): vastra_designs`);
                 if (typeof refreshUIForKey === 'function') refreshUIForKey('vastra_designs');
             }
         } catch (e) {
@@ -345,7 +360,7 @@ function startDeepSyncPoller() {
         console.log('🔄 Deep Sync: Verifying consistency...');
         SYNC_KEYS.forEach(key => pullAndMerge(key));
         pullAndMergeDesigns();
-    }, 10000); // 10 second goal
+    }, 5000); // 5 second goal
 }
 
 // ── UI Refresh ───────────────────────────────────
