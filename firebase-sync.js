@@ -352,15 +352,80 @@ window.syncDesignsToFirebaseManual = async function () {
     }, 150); // Super fast: 150ms debounce
 }
 
-// ── Background Deep Sync (Every 10s) ──────────────
-// This ensures that even if a websocket event was missed, data is 100% consistent across devices.
+// ── Background Deep Sync (Every 30s as safety net) ──────────
+// Fetch the entire shared node in ONE request to save network/mobile data
 function startDeepSyncPoller() {
-    setInterval(() => {
-        if (!fbReady || !fbConnected) return;
-        console.log('🔄 Deep Sync: Verifying consistency...');
-        SYNC_KEYS.forEach(key => pullAndMerge(key));
-        pullAndMergeDesigns();
-    }, 5000); // 5 second goal
+    setInterval(async () => {
+        if (!fbReady || !fbConnected || _suppressFirebaseWrite) return;
+        
+        console.log('🔄 Deep Sync: Batch verification...');
+        updateSyncStatus('syncing');
+
+        try {
+            const snapshot = await fbDB.ref('vastra_shared_data').once('value');
+            const cloudBatch = snapshot.val();
+            if (!cloudBatch) return;
+
+            // Handle standard keys
+            SYNC_KEYS.forEach(key => {
+                const cloudData = cloudBatch[key];
+                if (cloudData) {
+                    const cloudJSON = JSON.stringify(cloudData);
+                    // Consistency check: Only merge if Cloud differs from what we last thought was local
+                    if (cloudJSON !== _lastLocalJSON[key]) {
+                        const localData = JSON.parse(localStorage.getItem(key) || (key.includes('supplier') ? '{}' : '[]'));
+                        const merged = smartMerge(localData, cloudData);
+                        const mergedJSON = JSON.stringify(merged);
+                        
+                        if (mergedJSON !== JSON.stringify(localData)) {
+                            _suppressFirebaseWrite = true;
+                            localStorage.setItem(key, mergedJSON);
+                            _suppressFirebaseWrite = false;
+                            _lastLocalJSON[key] = mergedJSON;
+                            console.log(`⬇️ Batch update applied for ${key}`);
+                            if (typeof refreshUIForKey === 'function') refreshUIForKey(key);
+
+                            // If we have local additions not in cloud, they will be pushed via listeners/transactions
+                        } else {
+                            // Local and Cloud are effectively same, update cache
+                            _lastLocalJSON[key] = mergedJSON;
+                        }
+                    }
+                }
+            });
+
+            // Handle designs specially
+            const cloudDesigns = cloudBatch['vastra_designs'];
+            if (cloudDesigns && typeof VastraDB !== 'undefined') {
+                let fbData = cloudDesigns;
+                if (!Array.isArray(fbData) && typeof fbData === 'object') fbData = Object.values(fbData);
+                const fbDataStr = JSON.stringify(fbData);
+                
+                if (fbDataStr !== _lastLocalJSON['vastra_designs']) {
+                    const localDesigns = await VastraDB.getAll();
+                    const merged = smartMerge(localDesigns, fbData);
+                    // Sort numerically
+                    merged.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true, sensitivity: 'base' }));
+                    const mergedStr = JSON.stringify(merged);
+                    
+                    if (mergedStr !== JSON.stringify(localDesigns)) {
+                        _suppressFirebaseWrite = true;
+                        _lastLocalJSON['vastra_designs'] = mergedStr;
+                        await VastraDB.saveAll(merged);
+                        _suppressFirebaseWrite = false;
+                        console.log(`⬇️ Batch update applied for vastra_designs`);
+                        if (typeof refreshUIForKey === 'function') refreshUIForKey('vastra_designs');
+                    } else {
+                        _lastLocalJSON['vastra_designs'] = mergedStr;
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Deep sync poller error:", e);
+        } finally {
+            updateSyncStatus('online');
+        }
+    }, 15000); // 15 seconds is a healthy balance between real-time and server load
 }
 
 // ── UI Refresh ───────────────────────────────────
