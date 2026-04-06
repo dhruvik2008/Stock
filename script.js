@@ -838,10 +838,14 @@ async function saveDesign() {
             }
         }
 
-        // Duplicate check
-        const isDuplicate = designs.some(d => !d.deleted && d.name.toLowerCase() === name.toLowerCase() && d.id !== editingDesignId);
+        // Stricter Duplicate check (Master List)
+        const isDuplicate = designs.some(d => 
+            d.name.trim().toLowerCase() === name.trim().toLowerCase() && 
+            d.id !== editingDesignId &&
+            !d.deleted // Only active duplicates for now, but trimmed
+        );
         if (isDuplicate) {
-            showErrorToast(`Design "${name}" already exists! 🚫`);
+            showErrorToast(`Design "${name}" already exists in your list! 🚫`);
             if (saveBtn) {
                 saveBtn.disabled = false;
                 saveBtn.innerHTML = '<i class="fa fa-save"></i> SAVE DESIGN';
@@ -1072,7 +1076,7 @@ function getDesignStock(designIdOrName, size = null, color = null) {
     // Stock IN: sum all pack quantities and returns for this design+size+color
     let stockIn = 0;
     packs.forEach(p => {
-        if (p.items) {
+        if (!p.deleted && p.items) {
             p.items.forEach(item => {
                 const match = (designId && item.designId == designId) || (designName && item.name === designName);
                 const sizeMatch = !size || item.size === size;
@@ -1086,7 +1090,7 @@ function getDesignStock(designIdOrName, size = null, color = null) {
 
     // Add Sales Returns back to stock
     returns.forEach(sr => {
-        if (sr.items) {
+        if (!sr.deleted && sr.items) {
             sr.items.forEach(item => {
                 const match = (designId && item.designId == designId) || (designName && item.designName === designName);
                 const sizeMatch = !size || item.size === size;
@@ -1462,6 +1466,23 @@ function confirmAddItem() {
         ? document.getElementById('cdItemsArea')
         : document.getElementById('challanItemsArea');
 
+    // Duplicate check within current session
+    if (!_addingToDetail) {
+        const existingRows = area.querySelectorAll('.challan-item-row');
+        let alreadyExists = false;
+        existingRows.forEach(row => {
+            if (row.dataset.designId == _pendingDesign.id && row.dataset.size === size && row.dataset.color === color) {
+                alreadyExists = true;
+            }
+        });
+        if (alreadyExists) {
+            if (!confirm(`"${_pendingDesign.name}" (Size: ${size || '-'}) is already added to this challan. Add another row anyway?`)) {
+                closeQtyDialog();
+                return;
+            }
+        }
+    }
+
     if (!_addingToDetail) area.querySelector('.challan-items-empty')?.remove();
 
     if (_addingToDetail && currentDetailChallan) {
@@ -1669,7 +1690,21 @@ function deleteChallan(id) {
     }
     
     localStorage.setItem('vastra_challans', JSON.stringify(challans));
+    refreshStockViews();
+}
+
+function refreshStockViews() {
     renderChallanList();
+    if (typeof renderPackList === 'function') renderPackList();
+    if (typeof renderSRList === 'function') renderSRList();
+    if (typeof renderLiveStock === 'function') renderLiveStock();
+    updateStats();
+    
+    // Only refresh detail view if it's currently being viewed to avoid unwanted navigation
+    const detailSection = document.getElementById('liveStockDetailSection');
+    if (currentLSDesign && detailSection && detailSection.style.display !== 'none') {
+        openLiveStockDetail(currentLSDesign);
+    }
 }
 
 // Init challan list on load
@@ -2909,20 +2944,25 @@ function savePackDesign() {
     const area = document.getElementById('packCardsArea');
     const cards = area.querySelectorAll('.inv-card');
 
-    const items = [];
+    const itemsMap = {}; // key: designId_size_color -> item
     cards.forEach(card => {
         const cId = card.id;
         const dId = document.getElementById(`${cId}_designId`).value;
         const qty = parseInt(document.getElementById(`${cId}_qty`).value) || 0;
-        const size = document.getElementById(`${cId}_size`).value || '';
-        const color = document.getElementById(`${cId}_color`).value || '';
+        const size = (document.getElementById(`${cId}_size`).value || '').trim();
+        const color = (document.getElementById(`${cId}_color`).value || '').trim();
         const name = document.getElementById(`${cId}_name`).textContent;
-        const img = document.getElementById(`${cId}_img`).querySelector('img')?.src || '';
 
         if (dId && qty > 0) {
-            items.push({ designId: parseInt(dId), name, qty, size, color });
+            const key = `${dId}_${size}_${color}`;
+            if (itemsMap[key]) {
+                itemsMap[key].qty += qty;
+            } else {
+                itemsMap[key] = { designId: parseInt(dId), name, qty, size, color };
+            }
         }
     });
+    const items = Object.values(itemsMap);
 
     if (items.length === 0) {
         alert("Please select at least one design and enter quantity!");
@@ -2964,12 +3004,18 @@ function deletePackFromModal() {
     if (!confirm('Are you sure you want to delete this pack?')) return;
 
     let vastra_packs = JSON.parse(localStorage.getItem('vastra_packs') || '[]');
-    vastra_packs = vastra_packs.filter(p => p.id !== activeEditingPackId);
+    const p = vastra_packs.find(x => x.id === activeEditingPackId);
+    if (p) {
+        p.deleted = true;
+        p.updatedAt = Date.now();
+    } else {
+        vastra_packs = vastra_packs.filter(p => p.id !== activeEditingPackId);
+    }
     localStorage.setItem('vastra_packs', JSON.stringify(vastra_packs));
 
     closePackDesign();
     showToast(`Pack deleted! 🗑️`);
-    renderPackList();
+    refreshStockViews();
 }
 
 function renderPackList() {
@@ -2991,7 +3037,7 @@ function renderPackList() {
     let mappedPacks = packs.map((p, idx) => ({
         pack: p,
         packNum: `PACKAG-${packs.length - idx}`
-    }));
+    })).filter(obj => !obj.pack.deleted);
 
     if (query) {
         mappedPacks = mappedPacks.filter(obj =>
@@ -3677,9 +3723,15 @@ function srSizeStr(sr) {
 
 function deleteSR(id) {
     if (!confirm('Delete this sales return?')) return;
-    salesReturns = salesReturns.filter(sr => sr.id !== id);
+    const sr = salesReturns.find(x => x.id === id);
+    if (sr) {
+        sr.deleted = true;
+        sr.updatedAt = Date.now();
+    } else {
+        salesReturns = salesReturns.filter(sr => sr.id !== id);
+    }
     localStorage.setItem('vastra_salesReturns', JSON.stringify(salesReturns));
-    renderSRList();
+    refreshStockViews();
     showToast('Sales Return deleted');
 }
 
@@ -4790,7 +4842,9 @@ function changeLSTab(tabName, el) {
     packs.forEach(p => {
         if (!p.items) return;
         p.items.forEach(itm => {
-            if (itm.name === currentLSDesign && itm.qty > 0) {
+            // Robust match like getDesignStock
+            const isMatch = itm.name === currentLSDesign || itm.designId == (designs.find(d => d.name === currentLSDesign)?.id);
+            if (isMatch && itm.qty > 0) {
                 const d = parseDateDDMMYYYY(p.createdAt || p.dateTime);
                 records.push({
                     type: 'PACKAGED',
@@ -4802,6 +4856,7 @@ function changeLSTab(tabName, el) {
                     size: itm.size || '-',
                     sign: '+',
                     id: p.id,
+                    deleted: p.deleted, // Added
                     createdBy: p.createdBy || p.enteredBy || '-'
                 });
             }
@@ -4810,9 +4865,11 @@ function changeLSTab(tabName, el) {
 
     // Delivered (- stock)
     challans.forEach(c => {
+        // Include deleted ones for ledger visibility but clearly mark them
         if (!c.items) return;
         c.items.forEach(itm => {
-            if (itm.designName === currentLSDesign && itm.qty > 0) {
+            const isMatch = itm.designName === currentLSDesign || itm.designId == (designs.find(d => d.name === currentLSDesign)?.id);
+            if (isMatch && itm.qty > 0) {
                 const d = parseDateDDMMYYYY(c.createdAt || c.date);
                 records.push({
                     type: 'DELIVERED',
@@ -4824,7 +4881,8 @@ function changeLSTab(tabName, el) {
                     size: itm.size || '-',
                     sign: '-',
                     id: c.id,
-                    createdBy: c.createdBy || '-'
+                    deleted: c.deleted, // Added flag
+                    createdBy: (c.createdBy || '-').toUpperCase()
                 });
             }
         });
@@ -4834,7 +4892,8 @@ function changeLSTab(tabName, el) {
     returns.forEach(sr => {
         if (!sr.items) return;
         sr.items.forEach(itm => {
-            if (itm.designName === currentLSDesign && itm.qty > 0) {
+            const isMatch = itm.designName === currentLSDesign || itm.designId == (designs.find(d => d.name === currentLSDesign)?.id);
+            if (isMatch && itm.qty > 0) {
                 const d = parseDateDDMMYYYY(sr.createdAt || sr.returnDate);
                 records.push({
                     type: 'SALES RETURNED',
@@ -4846,7 +4905,8 @@ function changeLSTab(tabName, el) {
                     size: itm.size || '-',
                     sign: '+',
                     id: sr.id,
-                    createdBy: sr.createdBy || '-'
+                    deleted: sr.deleted, // Added
+                    createdBy: (sr.createdBy || '-').toUpperCase()
                 });
             }
         });
@@ -4865,8 +4925,10 @@ function changeLSTab(tabName, el) {
 
     let runningTotal = 0;
     records.forEach(r => {
-        if (r.sign === '+') runningTotal += r.qty;
-        else runningTotal -= r.qty;
+        if (!r.deleted) {
+            if (r.sign === '+') runningTotal += r.qty;
+            else runningTotal -= r.qty;
+        }
         r.balance = runningTotal;
     });
 
@@ -4942,14 +5004,16 @@ function changeLSTab(tabName, el) {
         html += `<div style="padding:10px 16px;font-size:15px;color:#005082;background:#eef5f9;border-top:1px solid #ddd;border-bottom:1px solid #ddd;font-weight:bold;">${monthYear}</div>`;
 
         events.forEach(ev => {
-            const qtyColor = ev.sign === '+' ? '#2e7d32' : '#e53935';
-            const displayQty = ev.sign === '+' ? `+ ${ev.qty}` : `- ${ev.qty}`;
+            const isCancelled = ev.deleted === true;
+            const qtyColor = isCancelled ? '#9e9e9e' : (ev.sign === '+' ? '#2e7d32' : '#e53935');
+            const displayQty = isCancelled ? `<span style="text-decoration:line-through">${ev.sign} ${ev.qty}</span>` : `${ev.sign} ${ev.qty}`;
+            const statusText = isCancelled ? '<span style="background:#ffebee;color:#c62828;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:bold;display:inline-flex;align-items:center;gap:3px;"><i class="fa fa-times-circle"></i> CANCELLED / DELETED</span>' : (ev.sign === '+' ? '<i class="fa fa-plus-circle"></i> ADDED' : '<i class="fa fa-minus-circle"></i> MINUS');
 
-            const clickAction = ev.type === 'PACKAGED' ? `editPack(${ev.id})` : ev.type === 'DELIVERED' ? `openChallanDetail(${ev.id})` : `openSRDetail(${ev.id})`;
+            const clickAction = isCancelled ? '' : (ev.type === 'PACKAGED' ? `editPack(${ev.id})` : ev.type === 'DELIVERED' ? `openChallanDetail(${ev.id})` : `openSRDetail(${ev.id})`);
 
             html += `
-            <div onclick="${clickAction}" style="background:#fff;padding:16px;border-bottom:1px solid #eee;display:flex;align-items:flex-start;gap:16px;cursor:pointer;">
-                <div style="width:55px;height:55px;background:#e8f4f8;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;">
+            <div onclick="${clickAction}" style="background:#fff;padding:16px;border-bottom:1px solid #eee;display:flex;align-items:flex-start;gap:16px;cursor:${isCancelled ? 'default' : 'pointer'};opacity:${isCancelled ? '0.6' : '1'}">
+                <div style="width:55px;height:55px;background:${isCancelled ? '#f5f5f5' : '#e8f4f8'};border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;">
                     <div style="font-size:11px;color:#333;font-weight:bold;line-height:1;">${ev.displayMonth}</div>
                     <div style="font-size:20px;color:#111;font-weight:bold;line-height:1;margin-top:2px;">${ev.displayDay}</div>
                 </div>
@@ -4960,7 +5024,7 @@ function changeLSTab(tabName, el) {
                     </div>
                     <div style="margin-bottom:10px; display:flex; gap:8px; align-items:center;">
                         <span style="background:#e1f0f8; color:#0077c2; border-radius:4px; padding:3px 8px; font-size:11px; font-weight:bold; display:inline-flex; align-items:center; gap:5px; border:1px solid #b3d7ef;">
-                            <i class="fa fa-user" style="font-size:10px;"></i> ${ev.createdBy.toUpperCase()}
+                            <i class="fa fa-user" style="font-size:10px;"></i> ${(ev.createdBy || 'Admin').toUpperCase()}
                         </span>
                         ${ev.subtitle && ev.subtitle !== '-' ? `
                         <span style="background:#fff3e0; color:#e65100; border-radius:4px; padding:3px 8px; font-size:11px; font-weight:bold; display:inline-flex; align-items:center; gap:5px; border:1px solid #ffe0b2;">
@@ -4968,19 +5032,19 @@ function changeLSTab(tabName, el) {
                         </span>` : ''}
                     </div>
                     <div style="font-size:13px;color:#888;display:flex;gap:12px;flex-wrap:wrap;">
-                        <span>Design: <b>${currentLSDesign}</b></span>
-                        <span style="background:#f0f0f0; padding:1px 6px; border-radius:4px; color:#333;">Size: <b>${ev.size.toUpperCase()}</b></span>
+                        <span>Design: <b>${currentLSDesign || '-'}</b></span>
+                        <span style="background:#f0f0f0; padding:1px 6px; border-radius:4px; color:#333;">Size: <b>${(ev.size || '-').toUpperCase()}</b></span>
                     </div>
                     <div style="font-size:13px;color:#888;margin-top:4px;">
                         ${ev.type === 'PACKAGED' ? 'Packed' : ev.type === 'DELIVERED' ? 'Delivery' : 'Returned'} Qty: <b>${ev.qty}</b> 
                         <span style="color:${qtyColor}; font-weight:bold; margin-left:10px;">
-                           ${ev.sign === '+' ? '<i class="fa fa-plus-circle"></i> ADDED' : '<i class="fa fa-minus-circle"></i> MINUS'}
+                           ${statusText}
                         </span>
                     </div>
                 </div>
 
                 <div style="align-self:center;">
-                    <button style="background:#e1f0f8; color:#0077c2; border:none; padding:6px 10px; border-radius:4px; font-size:11px; font-weight:bold; cursor:pointer;">VIEW</button>
+                    ${isCancelled ? '' : '<button style="background:#e1f0f8; color:#0077c2; border:none; padding:6px 10px; border-radius:4px; font-size:11px; font-weight:bold; cursor:pointer;">VIEW</button>'}
                 </div>
                 
                 <div style="text-align:right; min-width:80px;">
