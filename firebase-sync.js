@@ -508,16 +508,23 @@ localStorage.setItem = function (key, value) {
 document.addEventListener('DOMContentLoaded', () => {
     firebaseInit();
 
-    // Hook into VastraDB to automatically push designs to Firebase after saveAll
-    if (typeof VastraDB !== 'undefined' && typeof VastraDB.saveAll === 'function') {
-        const _origSaveAll = VastraDB.saveAll.bind(VastraDB);
-        VastraDB.saveAll = async function (data) {
-            const result = await _origSaveAll(data);
-            if (!_suppressFirebaseWrite) {
-                // Background sync
-                window.syncDesignsToFirebaseManual();
-            }
-            return result;
-        };
+    // Hook into VastraDB to automatically push designs to Firebase after saveAll or saveItem
+    if (typeof VastraDB !== 'undefined') {
+        if (typeof VastraDB.saveAll === 'function') {
+            const _origSaveAll = VastraDB.saveAll.bind(VastraDB);
+            VastraDB.saveAll = async function (data) {
+                const result = await _origSaveAll(data);
+                if (!_suppressFirebaseWrite) window.syncDesignsToFirebaseManual();
+                return result;
+            };
+        }
+        if (typeof VastraDB.saveItem === 'function') {
+            const _origSaveItem = VastraDB.saveItem.bind(VastraDB);
+            VastraDB.saveItem = async function (item) {
+                const result = await _origSaveItem(item);
+                if (!_suppressFirebaseWrite) window.syncDesignsToFirebaseManual();
+                return result;
+            };
+        }
     }
 });
