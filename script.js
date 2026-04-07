@@ -839,8 +839,8 @@ async function saveDesign() {
         }
 
         // Stricter Duplicate check (Master List)
-        const isDuplicate = designs.some(d => 
-            d.name.trim().toLowerCase() === name.trim().toLowerCase() && 
+        const isDuplicate = designs.some(d =>
+            d.name.trim().toLowerCase() === name.trim().toLowerCase() &&
             d.id !== editingDesignId &&
             !d.deleted // Only active duplicates for now, but trimmed
         );
@@ -934,7 +934,7 @@ function renderDesignsTable() {
 
     let filteredDesigns = designs.filter(d => !d.deleted);
     if (query) {
-        filteredDesigns = filteredDesigns.filter(d => 
+        filteredDesigns = filteredDesigns.filter(d =>
             (d.name && String(d.name).toLowerCase().includes(query)) ||
             (d.tags && String(d.tags).toLowerCase().includes(query)) ||
             (d.categories && d.categories.some(c => c && String(c).toLowerCase().includes(query))) ||
@@ -1003,7 +1003,7 @@ function renderDesignsTable() {
 
 function deleteDesign(id) {
     if (!confirm('Delete this design?')) return;
-    
+
     // Soft delete: mark as deleted instead of removing from array
     // This prevents Firebase smartMerge from bringing it back (resurrection)
     const d = designs.find(x => x.id === id);
@@ -1139,6 +1139,7 @@ function getDesignSizeWiseStock(designIdOrName) {
     const sizeStock = {};
 
     packs.forEach(p => {
+        if (p.deleted) return;
         (p.items || []).forEach(item => {
             const match = (designId && item.designId == designId) || (designName && item.name === designName);
             if (match) {
@@ -1149,6 +1150,7 @@ function getDesignSizeWiseStock(designIdOrName) {
     });
 
     returns.forEach(sr => {
+        if (sr.deleted) return;
         (sr.items || []).forEach(item => {
             const match = (designId && item.designId == designId) || (designName && item.designName === designName);
             if (match) {
@@ -1401,7 +1403,7 @@ function getLastDesignRate(designId, customerId = null) {
         const invoices = JSON.parse(localStorage.getItem('vastra_invoices') || '[]');
         // Latest first
         const sortedInvoices = invoices.slice().sort((a, b) => (b.updatedAt || b.id) - (a.updatedAt || a.id));
-        
+
         for (const inv of sortedInvoices) {
             if (customerId && inv.customerId != customerId) continue;
             const item = inv.items?.find(i => i.designId == designId);
@@ -1411,7 +1413,7 @@ function getLastDesignRate(designId, customerId = null) {
         // 2. Check in Challans (stored in vastra_challans)
         const challansList = JSON.parse(localStorage.getItem('vastra_challans') || '[]');
         const sortedChallans = challansList.slice().sort((a, b) => (b.updatedAt || b.id) - (a.updatedAt || a.id));
-        
+
         for (const c of sortedChallans) {
             if (customerId && c.customerId != customerId) continue;
             const item = c.items?.find(i => i.designId == designId);
@@ -1438,11 +1440,11 @@ function openQtyDialog(designId) {
             ${_pendingDesign.price && _pendingDesign.price !== '–' ? `<div class="qty-dialog-dprice">₹${_pendingDesign.price} / unit</div>` : ''}
         </div>`;
     document.getElementById('qtyInput').value = 1;
-    
+
     // Use last rate for this customer if available, otherwise fallback to design price
     const lastRate = getLastDesignRate(designId, selectedCustomerId);
     document.getElementById('rateInput').value = lastRate || _pendingDesign.price || '';
-    
+
     document.getElementById('sizeInput').value = '';
     document.getElementById('colorInput').value = '';
     closeDesignPicker();
@@ -1680,7 +1682,7 @@ function sumQty(challan) {
 
 function deleteChallan(id) {
     if (!confirm('Delete this challan?')) return;
-    
+
     const c = challans.find(x => x.id === id);
     if (c) {
         c.deleted = true;
@@ -1688,7 +1690,7 @@ function deleteChallan(id) {
     } else {
         challans = challans.filter(c => c.id !== id);
     }
-    
+
     localStorage.setItem('vastra_challans', JSON.stringify(challans));
     refreshStockViews();
 }
@@ -1699,7 +1701,7 @@ function refreshStockViews() {
     if (typeof renderSRList === 'function') renderSRList();
     if (typeof renderLiveStock === 'function') renderLiveStock();
     updateStats();
-    
+
     // Only refresh detail view if it's currently being viewed to avoid unwanted navigation
     const detailSection = document.getElementById('liveStockDetailSection');
     if (currentLSDesign && detailSection && detailSection.style.display !== 'none') {
@@ -3234,14 +3236,14 @@ function changeAnalysisTab(tab) {
     });
 
     const area = document.getElementById('analysisContentArea');
-    let challansData = JSON.parse(localStorage.getItem('vastra_challans') || '[]');
-    let packsData = JSON.parse(localStorage.getItem('vastra_packs') || '[]');
-    let srData = JSON.parse(localStorage.getItem('vastra_salesReturns') || '[]');
-    
+    let challansData = JSON.parse(localStorage.getItem('vastra_challans') || '[]').filter(x => !x.deleted);
+    let packsData = JSON.parse(localStorage.getItem('vastra_packs') || '[]').filter(x => !x.deleted);
+    let srData = JSON.parse(localStorage.getItem('vastra_salesReturns') || '[]').filter(x => !x.deleted);
+
     // Date Filtering
     const startVal = document.getElementById('analysisStart')?.value;
     const endVal = document.getElementById('analysisEnd')?.value;
-    
+
     if (startVal || endVal) {
         const start = startVal ? new Date(startVal + 'T00:00:00') : null;
         const end = endVal ? new Date(endVal + 'T23:59:59') : null;
@@ -3803,7 +3805,7 @@ function renderSRDetail(sr) {
                     <td><button onclick="removeSRDItem(${idx})" style="background:none;border:none;color:#c62828;font-size:18px;cursor:pointer"><i class="fa fa-times-circle"></i></button></td>
                 </tr></tbody>
             </table>
-            <div id="srd_total_${idx}" style="padding:6px 0;font-size:13px;font-weight:600;color:#fb8c00">Total: ${item.qty} x Rs.${item.rate || 0} = Rs.${((item.qty||0)*(item.rate||0)).toFixed(2)}</div>
+            <div id="srd_total_${idx}" style="padding:6px 0;font-size:13px;font-weight:600;color:#fb8c00">Total: ${item.qty} x Rs.${item.rate || 0} = Rs.${((item.qty || 0) * (item.rate || 0)).toFixed(2)}</div>
         </div>`).join('');
 }
 
@@ -4258,15 +4260,15 @@ function changeReturnTab(tab) {
 
     const area = document.getElementById('returnContentArea');
     let srData = JSON.parse(localStorage.getItem('vastra_salesReturns') || '[]');
-    
+
     // Date Filtering
     const startVal = document.getElementById('returnAnalysisStart')?.value;
     const endVal = document.getElementById('returnAnalysisEnd')?.value;
-    
+
     if (startVal || endVal) {
         const start = startVal ? new Date(startVal + 'T00:00:00') : null;
         const end = endVal ? new Date(endVal + 'T23:59:59') : null;
-        
+
         srData = srData.filter(sr => {
             const dateStr = sr.returnDate || sr.createdAt;
             if (!dateStr) return true;
@@ -4932,11 +4934,9 @@ function changeLSTab(tabName, el) {
         r.balance = runningTotal;
     });
 
-    // Re-sort newest first for display
-    records.sort((a, b) => {
-        if (b.rawDate - a.rawDate !== 0) return b.rawDate - a.rawDate;
-        return (b.id || 0) - (a.id || 0);
-    });
+    // Re-sort newest first for display by simply reversing
+    // This handles stable sort issues when multiple items have the same ID (same challan)
+    records.reverse();
 
     if (records.length === 0) {
         contentArea.innerHTML = `
@@ -4958,7 +4958,8 @@ function changeLSTab(tabName, el) {
 
     if (tabName === 'LEDGER') {
         headerTitle = 'Total Available Stock';
-        totalHeaderQty = getDesignStock(currentLSDesign).available;
+        // Match the header exactly with the calculated ledger balance
+        totalHeaderQty = runningTotal;
         sizeWiseSummary = getDesignSizeWiseStock(currentLSDesign);
     } else {
         headerTitle = `Total ${tabName.charAt(0) + tabName.slice(1).toLowerCase()} Qty`;
