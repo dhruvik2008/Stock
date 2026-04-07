@@ -378,13 +378,30 @@ const VastraDB = {
                     console.log(`IndexedDB: Saved ${data.length} designs.`);
                     resolve();
                 };
-                tx.onerror = (e) => {
-                    console.error("IndexedDB Transaction Error:", e);
-                    reject(e.target.error);
-                };
+                tx.onerror = (e) => reject(e.target.error);
             });
         } catch (err) {
-            console.error("VastraDB.saveAll failed:", err);
+            throw err;
+        }
+    },
+
+    async saveItem(item) {
+        if (!item.id) item.id = Date.now() + Math.random();
+        item.updatedAt = Date.now();
+        try {
+            const db = await this.init();
+            const tx = db.transaction(this.storeName, 'readwrite');
+            const store = tx.objectStore(this.storeName);
+            store.put(item);
+
+            return new Promise((resolve, reject) => {
+                tx.oncomplete = () => {
+                    console.log(`IndexedDB: Item ${item.id} saved.`);
+                    resolve();
+                };
+                tx.onerror = (e) => reject(e.target.error);
+            });
+        } catch (err) {
             throw err;
         }
     },
@@ -891,7 +908,16 @@ async function saveDesign() {
 
         // Storage phase
         try {
-            await VastraDB.saveAll(designs);
+            // Optimization: Save only the specific item instead of the whole list
+            const currentItem = editingDesignId !== null
+                ? designs.find(d => d.id === editingDesignId)
+                : designs[designs.length - 1];
+
+            if (typeof VastraDB.saveItem === 'function') {
+                await VastraDB.saveItem(currentItem);
+            } else {
+                await VastraDB.saveAll(designs);
+            }
         } catch (dbErr) {
             console.error("IndexedDB Save Failed:", dbErr);
             // We ignore it and fall back to localStorage/memory
