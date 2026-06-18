@@ -522,7 +522,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const _origSaveItem = VastraDB.saveItem.bind(VastraDB);
             VastraDB.saveItem = async function (item) {
                 const result = await _origSaveItem(item);
-                if (!_suppressFirebaseWrite) window.syncDesignsToFirebaseManual();
+                if (!_suppressFirebaseWrite) {
+                    if (fbReady && item && item.id) {
+                        // Push specific item to avoid transaction limits on the whole array
+                        fbDB.ref(`vastra_shared_data/vastra_designs/${item.id}`).set(item).catch(e => console.error("Fast sync error:", e));
+                    }
+                    window.syncDesignsToFirebaseManual();
+                }
                 return result;
             };
         }
