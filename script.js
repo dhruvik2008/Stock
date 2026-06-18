@@ -5242,9 +5242,10 @@ function renderLowStockAlert() {
 
             console.log(`Checking ${d.name}: Stock = ${currentStock}, Predicted Demand = ${predictedNext15Days} `);
 
-            // If current stock is less than predicted demand for next 15 days
+            // If current stock is less than 30% of what was sold in the last 15 days
             // OR if it's the test item, force it for visibility
-            if (currentStock < predictedNext15Days || d.name === "TEST-LOW-STOCK-ITEM") {
+            const threshold = Math.ceil(predictedNext15Days * 0.30);
+            if (currentStock < threshold || d.name === "TEST-LOW-STOCK-ITEM") {
                 lowStockList.push({
                     name: d.name,
                     size: (d.size && d.size !== '–') ? d.size : '',
