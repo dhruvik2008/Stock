@@ -1043,7 +1043,11 @@ function deleteDesign(id) {
     }
 
     try {
-        VastraDB.saveAll(designs);
+        if (d && typeof VastraDB.saveItem === 'function') {
+            VastraDB.saveItem(d);
+        } else {
+            VastraDB.saveAll(designs);
+        }
         localStorage.setItem('vastra_designs', JSON.stringify(designs));
         localStorage.setItem('vastra_designs_updatedAt', Date.now()); // Mark designs as updated
     } catch (e) {
@@ -5497,5 +5501,26 @@ function handleGlobalBarcode(code) {
 
         // Wait for modal to render and then open qty dialog
         setTimeout(() => openQtyDialog(matchedDesign.id), 150);
+    }
+}
+function deleteAllChallans() {
+    if (confirm('Are you sure you want to delete all Delivery Challans? This cannot be undone.')) {
+        localStorage.removeItem('vastra_challans');
+        renderChallanList();
+        renderAnalysis();
+    }
+}
+function deleteAllPacks() {
+    if (confirm('Are you sure you want to delete all Pack Designs? This cannot be undone.')) {
+        localStorage.removeItem('vastra_packs');
+        renderPackList();
+        renderAnalysis();
+    }
+}
+function deleteAllSalesReturns() {
+    if (confirm('Are you sure you want to delete all Sales Returns? This cannot be undone.')) {
+        localStorage.removeItem('vastra_salesReturns');
+        renderSRList();
+        renderAnalysis();
     }
 }
