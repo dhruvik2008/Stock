@@ -3409,7 +3409,7 @@ function changeAnalysisTab(tab) {
 
         area.innerHTML = arr.map((cust, idx) => {
             return `
-            <div style="display:flex;align-items:center;background:#fff;border:1px solid #eee;margin-bottom:10px;padding:12px;border-radius:4px;justify-content:space-between;">
+            <div onclick="filterChallanByCustomer('${cust.name.replace(/'/g, "\\'")}')" style="display:flex;align-items:center;background:#fff;border:1px solid #eee;margin-bottom:10px;padding:12px;border-radius:4px;justify-content:space-between;cursor:pointer;">
                 <div style="display:flex;align-items:center;gap:12px;">
                     <div style="font-weight:bold;font-size:16px;color:#888;width:30px;">#${idx + 1}</div>
                     <div style="font-size:15px;font-weight:bold;color:#333;">${cust.name}</div>
@@ -3417,6 +3417,20 @@ function changeAnalysisTab(tab) {
                 <div style="font-size:14px;color:#0088cc;font-weight:bold;">Total: ${cust.total} pcs</div>
             </div>`;
         }).join('');
+    }
+}
+
+function filterChallanByCustomer(name) {
+    const el = document.querySelector('[onclick*="challansSection"]');
+    if (el) {
+        showSection('challansSection', el);
+    } else {
+        showSection('challansSection', null);
+    }
+    const searchInput = document.getElementById('challansSearchInput');
+    if (searchInput) {
+        searchInput.value = name;
+        renderChallanList();
     }
 }
 
