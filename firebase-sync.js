@@ -429,6 +429,11 @@ function startDeepSyncPoller() {
 }
 
 // ── UI Refresh ───────────────────────────────────
+function isSectionVisible(id) {
+    const el = document.getElementById(id);
+    return el && el.style.display !== 'none';
+}
+
 function refreshUIForKey(key) {
     try {
         switch (key) {
@@ -437,28 +442,32 @@ function refreshUIForKey(key) {
                     VastraDB.getAll().then(res => {
                         // Sort designs numerically
                         designs = res.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true, sensitivity: 'base' }));
-                        if (typeof renderDesignsTable === 'function') renderDesignsTable();
+                        if (isSectionVisible('designsSection') && typeof renderDesignsTable === 'function') renderDesignsTable();
                         if (typeof updateStats === 'function') updateStats();
                     });
                 }
                 break;
             case 'vastra_challans':
                 challans = JSON.parse(localStorage.getItem('vastra_challans') || '[]');
-                if (typeof renderChallanList === 'function') renderChallanList();
+                if (typeof invalidateStockCache === 'function') invalidateStockCache();
+                if (isSectionVisible('challansSection') && typeof renderChallanList === 'function') renderChallanList();
                 if (typeof updateStats === 'function') updateStats();
                 // Refresh detail if open
                 if (typeof currentDetailChallan !== 'undefined' && currentDetailChallan && typeof renderChallanDetail === 'function') {
                     const fresh = challans.find(c => c.id === currentDetailChallan.id);
                     if (fresh) renderChallanDetail(fresh);
                 }
-                // Refresh stock views
-                if (typeof renderLiveStock === 'function') renderLiveStock();
-                if (typeof renderLowStockAlert === 'function') renderLowStockAlert();
+                // Refresh stock views only if currently visible
+                if (isSectionVisible('liveStockSection') && typeof renderLiveStock === 'function') renderLiveStock();
+                if (isSectionVisible('lowStockSection') && typeof renderLowStockAlert === 'function') renderLowStockAlert();
+                if (isSectionVisible('minLowStockSection') && typeof renderMinLowStock === 'function') renderMinLowStock();
                 break;
             case 'vastra_packs':
-                if (typeof renderPackList === 'function') renderPackList();
-                if (typeof renderLiveStock === 'function') renderLiveStock();
-                if (typeof renderLowStockAlert === 'function') renderLowStockAlert();
+                if (typeof invalidateStockCache === 'function') invalidateStockCache();
+                if (isSectionVisible('packSection') && typeof renderPackList === 'function') renderPackList();
+                if (isSectionVisible('liveStockSection') && typeof renderLiveStock === 'function') renderLiveStock();
+                if (isSectionVisible('lowStockSection') && typeof renderLowStockAlert === 'function') renderLowStockAlert();
+                if (isSectionVisible('minLowStockSection') && typeof renderMinLowStock === 'function') renderMinLowStock();
                 break;
             case 'vastra_customers':
                 customers = JSON.parse(localStorage.getItem('vastra_customers') || '[]');
@@ -471,9 +480,11 @@ function refreshUIForKey(key) {
                 break;
             case 'vastra_salesReturns':
                 salesReturns = JSON.parse(localStorage.getItem('vastra_salesReturns') || '[]');
-                if (typeof renderSRList === 'function') renderSRList();
-                if (typeof renderLiveStock === 'function') renderLiveStock();
-                if (typeof renderLowStockAlert === 'function') renderLowStockAlert();
+                if (typeof invalidateStockCache === 'function') invalidateStockCache();
+                if (isSectionVisible('salesReturnSection') && typeof renderSRList === 'function') renderSRList();
+                if (isSectionVisible('liveStockSection') && typeof renderLiveStock === 'function') renderLiveStock();
+                if (isSectionVisible('lowStockSection') && typeof renderLowStockAlert === 'function') renderLowStockAlert();
+                if (isSectionVisible('minLowStockSection') && typeof renderMinLowStock === 'function') renderMinLowStock();
                 break;
             case 'vastra_invoices':
                 if (typeof invoices !== 'undefined') invoices = JSON.parse(localStorage.getItem('vastra_invoices') || '[]');
