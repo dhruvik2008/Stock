@@ -676,6 +676,8 @@ body {
     cursor: pointer;
     transition: transform var(--transition), box-shadow var(--transition);
     position: relative;
+    content-visibility: auto;
+    contain-intrinsic-size: 200px 300px;
 }
 
 .design-card:hover {
@@ -2743,4 +2745,30 @@ input[type=number] {
     font-size: 13px;
     font-weight: 600;
     color: var(--text);
-}
+}
+
+/* ══ Low Stock Section Styles ══ */
+.min-stock-filter-btn {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    color: #475569;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: 'Inter', sans-serif;
+}
+
+.min-stock-filter-btn:hover {
+    background: #f1f5f9;
+    color: #1e293b;
+}
+
+.min-stock-filter-btn.active {
+    background: #d97706;
+    color: #fff;
+    border-color: #d97706;
+    box-shadow: 0 2px 4px rgba(217, 119, 6, 0.25);
+}
