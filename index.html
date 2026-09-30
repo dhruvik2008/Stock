@@ -206,6 +206,9 @@
                     <a class="sidebar-item" id="sideLowStock" onclick="showSection('lowStockSection',this)"><i
                             class="fa fa-exclamation-triangle"></i>
                         Low Stock Alert</a>
+                    <a class="sidebar-item" id="sideMinLowStock" onclick="showSection('minLowStockSection',this)"><i
+                            class="fa fa-boxes-stacked"></i>
+                        Low Stock</a>
 
                     <!-- Admin Only Items -->
                     <div id="adminOnlySidebar" style="border-top: 1px solid #eee; margin-top: 10px; padding-top: 10px;">
@@ -675,6 +678,59 @@
                         <div style="text-align:center;color:#888;margin-top:50px;">
                             <i class="fa fa-exclamation-triangle fa-3x" style="margin-bottom:15px;color:#ddd;"></i>
                             <p>Calculating stock requirements...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ══ LOW STOCK SECTION (MINIMUM STOCK QUANTITY) ══ -->
+                <div id="minLowStockSection" class="page-section" style="display:none;background:#f8fafc;min-height:100%;">
+                    <div style="background:linear-gradient(135deg, #d97706, #b45309);padding:14px 20px;color:#fff;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+                        <div style="display:flex;align-items:center;gap:10px;flex:1;">
+                            <i class="fa fa-boxes-stacked" style="font-size:20px;"></i>
+                            <div>
+                                <h2 style="font-size:18px;margin:0;font-weight:700;">Low Stock</h2>
+                                <span style="font-size:12px;opacity:0.9;">Designs where stock is less than Minimum Stock Quantity</span>
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:10px;align-items:center;">
+                            <button onclick="exportMinLowStockExcel()" style="background:rgba(255,255,255,0.2);color:#fff;border:1px solid rgba(255,255,255,0.4);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;">
+                                <i class="fa fa-file-excel"></i> Export
+                            </button>
+                            <button onclick="window.print()" style="background:rgba(255,255,255,0.2);color:#fff;border:1px solid rgba(255,255,255,0.4);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;">
+                                <i class="fa fa-print"></i> Print
+                            </button>
+                            <button onclick="renderMinLowStock()" style="background:#fff;color:#b45309;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;">
+                                <i class="fa fa-sync-alt"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Summary KPI Cards -->
+                    <div style="padding:16px 20px 0 20px;">
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px;margin-bottom:16px;" id="minLowStockKpis">
+                            <!-- Dynamic KPI summary rendered here -->
+                        </div>
+
+                        <!-- Search & Filter Controls -->
+                        <div style="background:#fff;border-radius:8px;padding:12px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);border:1px solid #e2e8f0;margin-bottom:16px;">
+                            <div style="flex:1;min-width:240px;display:flex;align-items:center;background:#f1f5f9;border-radius:6px;padding:8px 12px;">
+                                <i class="fa fa-search" style="color:#64748b;margin-right:8px;"></i>
+                                <input type="text" id="minLowStockSearch" placeholder="Search by design name or size..." oninput="filterMinLowStockCards()" style="border:none;background:transparent;outline:none;width:100%;font-size:14px;" />
+                            </div>
+                            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                <span style="font-size:13px;color:#64748b;font-weight:500;">Filter:</span>
+                                <button class="min-stock-filter-btn active" data-filter="all" onclick="setMinStockFilter('all', this)">All Low Stock</button>
+                                <button class="min-stock-filter-btn" data-filter="below-min" onclick="setMinStockFilter('below-min', this)">Below Min Qty</button>
+                                <button class="min-stock-filter-btn" data-filter="out-of-stock" onclick="setMinStockFilter('out-of-stock', this)">Out of Stock (<= 0)</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="padding:0 20px 24px 20px;" id="minLowStockResults">
+                        <!-- Dynamic cards rendered here -->
+                        <div style="text-align:center;color:#888;margin-top:50px;">
+                            <i class="fa fa-boxes-stacked fa-3x" style="margin-bottom:15px;color:#cbd5e1;"></i>
+                            <p>Loading Low Stock information...</p>
                         </div>
                     </div>
                 </div>
