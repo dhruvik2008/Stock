@@ -71,6 +71,42 @@ function parseDateDDMMYYYY(str) {
 const FIXED_EMAIL = 'maniyadhruvik07@gmail.com';
 const FIXED_PASSWORD = 'maniya@#07';
 
+// ── PERFORMANCE UTILITIES ─────────────────────────
+function debounce(fn, wait = 250) {
+    let timeout;
+    return function (...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => fn.apply(this, args), wait);
+    };
+}
+
+const debouncedRenderDesignsTable = debounce(() => renderDesignsTable(), 250);
+const debouncedRenderChallanList = debounce(() => renderChallanList(), 250);
+const debouncedRenderPackList = debounce(() => renderPackList(), 250);
+const debouncedRenderSRList = debounce(() => renderSRList(), 250);
+const debouncedRenderLiveStock = debounce(() => renderLiveStock(), 250);
+const debouncedFilterMinLowStockCards = debounce(() => filterMinLowStockCards(), 200);
+
+// ── SMART IN-MEMORY CACHE FOR FAST STOCK CALCULATION ──
+let _cachedPacks = null;
+let _cachedChallans = null;
+let _cachedReturns = null;
+let _stockCache = new Map();
+
+function invalidateStockCache() {
+    _cachedPacks = null;
+    _cachedChallans = null;
+    _cachedReturns = null;
+    _stockCache.clear();
+}
+
+function getCachedStockData() {
+    if (!_cachedPacks) _cachedPacks = JSON.parse(localStorage.getItem('vastra_packs') || '[]');
+    if (!_cachedChallans) _cachedChallans = JSON.parse(localStorage.getItem('vastra_challans') || '[]');
+    if (!_cachedReturns) _cachedReturns = JSON.parse(localStorage.getItem('vastra_salesReturns') || '[]');
+    return { packs: _cachedPacks, challans: _cachedChallans, returns: _cachedReturns };
+}
+
 // ── STATE ─────────────────────────────────────────
 let designs = []; // Now loaded asynchronously from VastraDB
 let categories = [];
@@ -521,9 +557,9 @@ function showSection(sectionId, sidebarEl) {
         if (el) el.style.display = (id === sectionId) ? 'block' : 'none';
 
         if (id === sectionId) {
-            if (id === 'liveStockSection') renderLiveStock();
-            if (id === 'lowStockSection') renderLowStockAlert();
-            if (id === 'minLowStockSection') renderMinLowStock();
+            if (id === 'liveStockSection') { invalidateStockCache(); renderLiveStock(); }
+            if (id === 'lowStockSection') { invalidateStockCache(); renderLowStockAlert(); }
+            if (id === 'minLowStockSection') { invalidateStockCache(); renderMinLowStock(); }
             if (id === 'permissionsSection') renderPermissionsTable();
         }
     });
@@ -992,12 +1028,13 @@ function renderDesignsTable() {
         return;
     }
 
-    filteredDesigns.forEach(d => {
+    // Create design card element with lazy loaded image
+    function createDesignCard(d) {
         const card = document.createElement('div');
         card.className = 'design-card';
 
         const imgHTML = d.imgSrc
-            ? `<img src="${d.imgSrc}" alt="${d.name}"/>`
+            ? `<img src="${d.imgSrc}" alt="${d.name}" loading="lazy" decoding="async"/>`
             : `<i class="fa fa-tshirt no-img-icon"></i>`;
 
         const priceHTML = (d.price && d.price !== '–')
@@ -1024,10 +1061,28 @@ function renderDesignsTable() {
         ${catText ? `<div class="design-card-cat">${catText}</div>` : ''}
       </div>
     `;
-        // Click anywhere on card (except delete btn) → open edit
         card.addEventListener('click', () => openEditDesignModal(d.id));
-        grid.appendChild(card);
+        return card;
+    }
+
+    // Render using DocumentFragment to eliminate layout reflows
+    const fragment = document.createDocumentFragment();
+    const initialBatch = filteredDesigns.slice(0, 48);
+    initialBatch.forEach(d => {
+        fragment.appendChild(createDesignCard(d));
     });
+    grid.appendChild(fragment);
+
+    // Render remaining cards asynchronously in next animation frame to prevent freeze
+    if (filteredDesigns.length > 48) {
+        requestAnimationFrame(() => {
+            const restFragment = document.createDocumentFragment();
+            for (let i = 48; i < filteredDesigns.length; i++) {
+                restFragment.appendChild(createDesignCard(filteredDesigns[i]));
+            }
+            grid.appendChild(restFragment);
+        });
+    }
 }
 
 function deleteDesign(id) {
@@ -1085,12 +1140,15 @@ function getDesignHSN(designId) {
     return (d && d.hsn && d.hsn !== '–') ? d.hsn : '';
 }
 
-// ── HELPER: get stock for a design ───────────────
+// ── HELPER: get stock for a design (Cached & Fast) ───────────────
 // Stock IN = Pack Design quantity, Stock OUT = Delivery Challan quantity
 function getDesignStock(designIdOrName, size = null, color = null) {
-    const packs = JSON.parse(localStorage.getItem('vastra_packs') || '[]');
-    const challans = JSON.parse(localStorage.getItem('vastra_challans') || '[]');
-    const returns = JSON.parse(localStorage.getItem('vastra_salesReturns') || '[]');
+    const cacheKey = `${designIdOrName}_${size || ''}_${color || ''}`;
+    if (_stockCache.has(cacheKey)) {
+        return _stockCache.get(cacheKey);
+    }
+
+    const { packs, challans, returns } = getCachedStockData();
 
     // If we only have name, try to find the ID from global designs array
     let designId = null;
@@ -1101,56 +1159,56 @@ function getDesignStock(designIdOrName, size = null, color = null) {
         designId = d.id;
         designName = d.name;
     } else {
-        // Fallback for cases where design is not in master list anymore
         if (typeof designIdOrName === 'number') designId = designIdOrName;
         else designName = designIdOrName;
     }
 
     // Stock IN: sum all pack quantities and returns for this design+size+color
     let stockIn = 0;
-    packs.forEach(p => {
+    for (let i = 0; i < packs.length; i++) {
+        const p = packs[i];
         if (!p.deleted && p.items) {
-            p.items.forEach(item => {
+            for (let j = 0; j < p.items.length; j++) {
+                const item = p.items[j];
                 const match = (designId && item.designId == designId) || (designName && item.name === designName);
-                const sizeMatch = !size || item.size === size;
-                const colorMatch = !color || item.color === color;
-                if (match && sizeMatch && colorMatch) {
-                    stockIn += parseInt(item.qty || 0);
+                if (match && (!size || item.size === size) && (!color || item.color === color)) {
+                    stockIn += (parseInt(item.qty, 10) || 0);
                 }
-            });
+            }
         }
-    });
+    }
 
-    // Add Sales Returns back to stock
-    returns.forEach(sr => {
+    for (let i = 0; i < returns.length; i++) {
+        const sr = returns[i];
         if (!sr.deleted && sr.items) {
-            sr.items.forEach(item => {
+            for (let j = 0; j < sr.items.length; j++) {
+                const item = sr.items[j];
                 const match = (designId && item.designId == designId) || (designName && item.designName === designName);
-                const sizeMatch = !size || item.size === size;
-                const colorMatch = !color || item.color === color;
-                if (match && sizeMatch && colorMatch) {
-                    stockIn += parseInt(item.qty || 0);
+                if (match && (!size || item.size === size) && (!color || item.color === color)) {
+                    stockIn += (parseInt(item.qty, 10) || 0);
                 }
-            });
+            }
         }
-    });
+    }
 
     // Stock OUT: sum all challan quantities for this design+size+color
     let stockOut = 0;
-    challans.forEach(c => {
+    for (let i = 0; i < challans.length; i++) {
+        const c = challans[i];
         if (!c.deleted && c.items) {
-            c.items.forEach(item => {
+            for (let j = 0; j < c.items.length; j++) {
+                const item = c.items[j];
                 const match = (designId && item.designId == designId) || (designName && item.designName === designName);
-                const sizeMatch = !size || item.size === size;
-                const colorMatch = !color || item.color === color;
-                if (match && sizeMatch && colorMatch) {
-                    stockOut += parseInt(item.qty || 0);
+                if (match && (!size || item.size === size) && (!color || item.color === color)) {
+                    stockOut += (parseInt(item.qty, 10) || 0);
                 }
-            });
+            }
         }
-    });
+    }
 
-    return { stockIn, stockOut, available: stockIn - stockOut };
+    const result = { stockIn, stockOut, available: stockIn - stockOut };
+    _stockCache.set(cacheKey, result);
+    return result;
 }
 
 function getDesignSizeWiseStock(designIdOrName) {
@@ -4492,7 +4550,7 @@ function renderLiveStock() {
         overallStockTotal += stock.available;
 
         const imgSrc = d.imgSrc || '';
-        const imgHTML = imgSrc ? `<img src="${imgSrc}" style="width:100%;height:100%;object-fit:cover;" />` : '';
+        const imgHTML = imgSrc ? `<img src="${imgSrc}" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;" />` : '';
 
         html += `
         <div onclick="openLiveStockDetail('${d.name.replace(/'/g, "\\'")}')" style="cursor: pointer; background: #fff; border: 1px solid #eab676; border-radius: 4px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); overflow: hidden;">
@@ -5302,7 +5360,7 @@ function renderLowStockAlert() {
             <div style="background:#fff;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.08);overflow:hidden;border-left:6px solid #e53935;transition:transform 0.2s;cursor:default;">
                     <div style="padding:16px;display:flex;gap:15px;align-items:center;">
                         <div style="width:80px;height:80px;background:#f0f0f0;border-radius:8px;overflow:hidden;flex-shrink:0;box-shadow:inset 0 0 5px rgba(0,0,0,0.1);">
-                            ${item.imgSrc ? `<img src="${item.imgSrc}" style="width:100%;height:100%;object-fit:cover" />` : '<div style="display:flex;justify-content:center;align-items:center;height:100%;color:#ccc;font-size:24px;"><i class="fa fa-tshirt"></i></div>'}
+                            ${item.imgSrc ? `<img src="${item.imgSrc}" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover" />` : '<div style="display:flex;justify-content:center;align-items:center;height:100%;color:#ccc;font-size:24px;"><i class="fa fa-tshirt"></i></div>'}
                         </div>
                         <div style="flex:1;">
                             <h4 style="margin:0 0 4px 0;color:#1a1a1a;font-size:17px;font-weight:700;">${item.name}</h4>
@@ -5514,7 +5572,7 @@ function filterMinLowStockCards() {
             <div style="background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);overflow:hidden;border:1px solid #e2e8f0;border-left:5px solid ${borderColor};display:flex;flex-direction:column;transition:transform 0.15s, box-shadow 0.15s;">
                 <div style="padding:16px;display:flex;gap:14px;align-items:center;flex:1;">
                     <div style="width:72px;height:72px;background:#f1f5f9;border-radius:8px;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;border:1px solid #e2e8f0;">
-                        ${item.imgSrc ? `<img src="${item.imgSrc}" style="width:100%;height:100%;object-fit:cover;" />` : '<i class="fa fa-tshirt" style="font-size:24px;color:#cbd5e1;"></i>'}
+                        ${item.imgSrc ? `<img src="${item.imgSrc}" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;" />` : '<i class="fa fa-tshirt" style="font-size:24px;color:#cbd5e1;"></i>'}
                     </div>
                     <div style="flex:1;min-width:0;">
                         <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px;">
