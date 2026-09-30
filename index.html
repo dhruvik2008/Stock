@@ -235,7 +235,7 @@
                     <div style="padding:0 16px 12px;display:flex;align-items:center;margin-top:-8px;">
                         <div style="background:#fff;border-radius:4px;padding:8px 12px;flex:1;display:flex;align-items:center;border:1px solid #ddd;">
                             <i class="fa fa-search" style="color:#888;"></i>
-                            <input type="text" id="designsSearchInput" placeholder="Search Designs..." oninput="renderDesignsTable()" style="border:none;outline:none;width:100%;margin-left:8px;font-size:14px;" />
+                            <input type="text" id="designsSearchInput" placeholder="Search Designs..." oninput="debouncedRenderDesignsTable()" style="border:none;outline:none;width:100%;margin-left:8px;font-size:14px;" />
                         </div>
                     </div>
                     <div id="designsGrid" class="designs-grid">
@@ -258,7 +258,7 @@
                     <div style="padding:0 16px 12px;display:flex;align-items:center;margin-top:-8px;">
                         <div style="background:#fff;border-radius:4px;padding:8px 12px;flex:1;display:flex;align-items:center;border:1px solid #ddd;">
                             <i class="fa fa-search" style="color:#888;"></i>
-                            <input type="text" id="challansSearchInput" placeholder="Search Delivery Challan..." oninput="renderChallanList()" style="border:none;outline:none;width:100%;margin-left:8px;font-size:14px;" />
+                            <input type="text" id="challansSearchInput" placeholder="Search Delivery Challan..." oninput="debouncedRenderChallanList()" style="border:none;outline:none;width:100%;margin-left:8px;font-size:14px;" />
                         </div>
                     </div>
                     <!-- Date Filter Bar -->
@@ -312,7 +312,7 @@
                     <div style="padding:0 16px 12px;display:flex;align-items:center;margin-top:-8px;">
                         <div style="background:#fff;border-radius:4px;padding:8px 12px;flex:1;display:flex;align-items:center;border:1px solid #ddd;">
                             <i class="fa fa-search" style="color:#888;"></i>
-                            <input type="text" id="packSearchInput" placeholder="Search Pack Design..." oninput="renderPackList()" style="border:none;outline:none;width:100%;margin-left:8px;font-size:14px;" />
+                            <input type="text" id="packSearchInput" placeholder="Search Pack Design..." oninput="debouncedRenderPackList()" style="border:none;outline:none;width:100%;margin-left:8px;font-size:14px;" />
                         </div>
                     </div>
                     <!-- Date Filter Bar -->
@@ -410,7 +410,7 @@
                     <div style="padding:0 16px 12px;display:flex;align-items:center;margin-top:-8px;">
                         <div style="background:#fff;border-radius:4px;padding:8px 12px;flex:1;display:flex;align-items:center;border:1px solid #ddd;">
                             <i class="fa fa-search" style="color:#888;"></i>
-                            <input type="text" id="srSearchInput" placeholder="Search Sales Return..." oninput="renderSRList()" style="border:none;outline:none;width:100%;margin-left:8px;font-size:14px;" />
+                            <input type="text" id="srSearchInput" placeholder="Search Sales Return..." oninput="debouncedRenderSRList()" style="border:none;outline:none;width:100%;margin-left:8px;font-size:14px;" />
                         </div>
                     </div>
                     <!-- Date Filter Bar -->
@@ -499,7 +499,7 @@
                             <i class="fa fa-search" style="color:#888;font-size:14px"></i>
                             <input type="text" id="liveStockSearchInput" placeholder="Search Design..."
                                 style="border:none;outline:none;padding:6px;font-size:14px;width:100%"
-                                oninput="renderLiveStock()" />
+                                oninput="debouncedRenderLiveStock()" />
                             <i class="fa fa-times" style="color:#888;font-size:14px;cursor:pointer"
                                 onclick="openLiveStockSearch(false)"></i>
                         </div>
@@ -715,7 +715,7 @@
                         <div style="background:#fff;border-radius:8px;padding:12px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);border:1px solid #e2e8f0;margin-bottom:16px;">
                             <div style="flex:1;min-width:240px;display:flex;align-items:center;background:#f1f5f9;border-radius:6px;padding:8px 12px;">
                                 <i class="fa fa-search" style="color:#64748b;margin-right:8px;"></i>
-                                <input type="text" id="minLowStockSearch" placeholder="Search by design name or size..." oninput="filterMinLowStockCards()" style="border:none;background:transparent;outline:none;width:100%;font-size:14px;" />
+                                <input type="text" id="minLowStockSearch" placeholder="Search by design name or size..." oninput="debouncedFilterMinLowStockCards()" style="border:none;background:transparent;outline:none;width:100%;font-size:14px;" />
                             </div>
                             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                                 <span style="font-size:13px;color:#64748b;font-weight:500;">Filter:</span>
