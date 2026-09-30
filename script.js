@@ -255,7 +255,8 @@ function applyPermissions() {
         { id: 'returnAnalysisSection', el: document.querySelector('[onclick*="returnAnalysisSection"]') },
         { id: 'liveStockSection', el: document.querySelector('[onclick*="liveStockSection"]') },
         { id: 'totalSellReportSection', el: document.querySelector('[onclick*="totalSellReportSection"]') },
-        { id: 'lowStockSection', el: document.getElementById('sideLowStock') }
+        { id: 'lowStockSection', el: document.getElementById('sideLowStock') },
+        { id: 'minLowStockSection', el: document.getElementById('sideMinLowStock') }
     ];
 
     menuLinks.forEach(item => {
@@ -283,7 +284,8 @@ const MENU_ITEMS = [
     { id: 'returnAnalysisSection', label: 'Return Analysis' },
     { id: 'liveStockSection', label: 'Live Stock' },
     { id: 'totalSellReportSection', label: 'Total Sell Report' },
-    { id: 'lowStockSection', label: 'Low Stock Alert' }
+    { id: 'lowStockSection', label: 'Low Stock Alert' },
+    { id: 'minLowStockSection', label: 'Low Stock' }
 ];
 const ROLES = ['Amish', 'Office', 'Packing', 'Bholo'];
 
@@ -511,7 +513,7 @@ function showSection(sectionId, sidebarEl) {
         'designsSection', 'challansSection', 'packSection', 'salesReturnSection',
         'analysisSection', 'returnAnalysisSection', 'liveStockSection',
         'liveStockDetailSection', 'totalSellReportSection', 'lowStockSection',
-        'permissionsSection'
+        'minLowStockSection', 'permissionsSection'
     ];
 
     allSections.forEach(id => {
@@ -521,6 +523,7 @@ function showSection(sectionId, sidebarEl) {
         if (id === sectionId) {
             if (id === 'liveStockSection') renderLiveStock();
             if (id === 'lowStockSection') renderLowStockAlert();
+            if (id === 'minLowStockSection') renderMinLowStock();
             if (id === 'permissionsSection') renderPermissionsTable();
         }
     });
@@ -3239,6 +3242,9 @@ showSection = function (id, el) {
     if (id === 'returnAnalysisSection') {
         changeReturnTab('customer');
     }
+    if (id === 'minLowStockSection') {
+        renderMinLowStock();
+    }
 };
 
 // ═════════════════════ ANALYSIS LOGIC ═══════════════════════
@@ -5327,6 +5333,260 @@ function renderLowStockAlert() {
         resultsArea.innerHTML = html;
         if (lowStockList.length > 0) showToast(`Found ${lowStockList.length} designs with low stock.`);
     }, 500);
+}
+
+// ── LOW STOCK (BY MINIMUM STOCK QUANTITY) ──────────────
+let currentMinStockFilter = 'all';
+
+function setMinStockFilter(filterType, btnEl) {
+    currentMinStockFilter = filterType;
+    document.querySelectorAll('.min-stock-filter-btn').forEach(b => b.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
+    filterMinLowStockCards();
+}
+
+function renderMinLowStock() {
+    console.log("Rendering Low Stock (Minimum Stock Quantity)...");
+    const resultsArea = document.getElementById('minLowStockResults');
+    const kpiArea = document.getElementById('minLowStockKpis');
+    if (!resultsArea) return;
+
+    resultsArea.innerHTML = '<div style="text-align:center;padding:50px;color:#888;"><i class="fa fa-spinner fa-spin fa-2x"></i><br/><br/>Checking design stock against minimum stock limits...</div>';
+
+    setTimeout(() => {
+        const allActive = (designs || []).filter(d => !d.deleted);
+        const lowStockItems = [];
+        let totalDeficit = 0;
+        let belowMinCount = 0;
+        let outOfStockCount = 0;
+
+        allActive.forEach(d => {
+            const stockObj = getDesignStock(d.name);
+            const currentStock = stockObj.available;
+
+            // Parse user-defined Minimum Stock Quantity
+            let minStockVal = null;
+            if (d.minStock && d.minStock !== '–' && String(d.minStock).trim() !== '') {
+                const parsed = parseFloat(d.minStock);
+                if (!isNaN(parsed) && parsed > 0) {
+                    minStockVal = parsed;
+                }
+            }
+
+            // Check if stock is below Minimum Stock Quantity OR <= 0
+            let isLow = false;
+            let isBelowMin = false;
+            let isOutOfStock = (currentStock <= 0);
+
+            if (minStockVal !== null && currentStock < minStockVal) {
+                isLow = true;
+                isBelowMin = true;
+            } else if (isOutOfStock) {
+                isLow = true;
+            }
+
+            if (isLow) {
+                const targetMin = minStockVal !== null ? minStockVal : 0;
+                const deficit = Math.max(0, targetMin - currentStock);
+                if (deficit > 0) totalDeficit += deficit;
+                if (isBelowMin) belowMinCount++;
+                if (isOutOfStock) outOfStockCount++;
+
+                lowStockItems.push({
+                    id: d.id,
+                    name: d.name,
+                    size: (d.size && d.size !== '–') ? d.size : '',
+                    price: (d.price && d.price !== '–') ? d.price : '',
+                    currentStock: currentStock,
+                    minStock: minStockVal,
+                    deficit: deficit,
+                    isOutOfStock: isOutOfStock,
+                    isBelowMin: isBelowMin,
+                    imgSrc: d.imgSrc || ''
+                });
+            }
+        });
+
+        // Sort by highest deficit / shortage first
+        lowStockItems.sort((a, b) => b.deficit - a.deficit || a.currentStock - b.currentStock);
+        window._minLowStockItems = lowStockItems;
+
+        // Render KPI summary
+        if (kpiArea) {
+            kpiArea.innerHTML = `
+                <div style="background:#fff;border-radius:10px;padding:14px 18px;border-left:4px solid #d97706;box-shadow:0 1px 3px rgba(0,0,0,0.06);display:flex;align-items:center;justify-content:space-between;">
+                    <div>
+                        <div style="font-size:12px;color:#64748b;font-weight:600;text-transform:uppercase;">Low Stock Designs</div>
+                        <div style="font-size:22px;font-weight:800;color:#1e293b;margin-top:2px;">${lowStockItems.length}</div>
+                    </div>
+                    <div style="background:#fef3c7;width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#d97706;font-size:18px;">
+                        <i class="fa fa-boxes-stacked"></i>
+                    </div>
+                </div>
+                <div style="background:#fff;border-radius:10px;padding:14px 18px;border-left:4px solid #ea580c;box-shadow:0 1px 3px rgba(0,0,0,0.06);display:flex;align-items:center;justify-content:space-between;">
+                    <div>
+                        <div style="font-size:12px;color:#64748b;font-weight:600;text-transform:uppercase;">Below Min Limit</div>
+                        <div style="font-size:22px;font-weight:800;color:#1e293b;margin-top:2px;">${belowMinCount}</div>
+                    </div>
+                    <div style="background:#ffedd5;width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#ea580c;font-size:18px;">
+                        <i class="fa fa-arrow-down"></i>
+                    </div>
+                </div>
+                <div style="background:#fff;border-radius:10px;padding:14px 18px;border-left:4px solid #ef4444;box-shadow:0 1px 3px rgba(0,0,0,0.06);display:flex;align-items:center;justify-content:space-between;">
+                    <div>
+                        <div style="font-size:12px;color:#64748b;font-weight:600;text-transform:uppercase;">Out Of Stock (<=0)</div>
+                        <div style="font-size:22px;font-weight:800;color:#1e293b;margin-top:2px;">${outOfStockCount}</div>
+                    </div>
+                    <div style="background:#fee2e2;width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#ef4444;font-size:18px;">
+                        <i class="fa fa-ban"></i>
+                    </div>
+                </div>
+                <div style="background:#fff;border-radius:10px;padding:14px 18px;border-left:4px solid #2563eb;box-shadow:0 1px 3px rgba(0,0,0,0.06);display:flex;align-items:center;justify-content:space-between;">
+                    <div>
+                        <div style="font-size:12px;color:#64748b;font-weight:600;text-transform:uppercase;">Total Units Needed</div>
+                        <div style="font-size:22px;font-weight:800;color:#1e293b;margin-top:2px;">+${totalDeficit}</div>
+                    </div>
+                    <div style="background:#dbeafe;width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#2563eb;font-size:18px;">
+                        <i class="fa fa-cart-plus"></i>
+                    </div>
+                </div>
+            `;
+        }
+
+        filterMinLowStockCards();
+        if (lowStockItems.length > 0) {
+            showToast(`Found ${lowStockItems.length} designs in Low Stock.`);
+        }
+    }, 300);
+}
+
+function filterMinLowStockCards() {
+    const resultsArea = document.getElementById('minLowStockResults');
+    if (!resultsArea) return;
+
+    const items = window._minLowStockItems || [];
+    const searchVal = (document.getElementById('minLowStockSearch')?.value || '').toLowerCase().trim();
+
+    let filtered = items.filter(item => {
+        // Search match
+        const matchSearch = !searchVal || 
+            item.name.toLowerCase().includes(searchVal) || 
+            (item.size && item.size.toLowerCase().includes(searchVal));
+
+        // Filter type
+        let matchFilter = true;
+        if (currentMinStockFilter === 'below-min') {
+            matchFilter = item.isBelowMin;
+        } else if (currentMinStockFilter === 'out-of-stock') {
+            matchFilter = item.isOutOfStock;
+        }
+        return matchSearch && matchFilter;
+    });
+
+    if (filtered.length === 0) {
+        if (items.length === 0) {
+            resultsArea.innerHTML = `
+                <div style="text-align:center;color:#166534;margin-top:40px;background:#f0fdf4;padding:40px;border-radius:12px;border:1px solid #bbf7d0;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+                    <i class="fa fa-circle-check fa-3x" style="margin-bottom:12px;color:#22c55e;"></i>
+                    <h3 style="margin:0 0 6px 0;font-size:18px;font-weight:700;">Stock Levels Healthy!</h3>
+                    <p style="margin:0;color:#15803d;font-size:14px;">All designs currently have stock above their configured Minimum Stock Quantity.</p>
+                </div>`;
+        } else {
+            resultsArea.innerHTML = `
+                <div style="text-align:center;color:#64748b;margin-top:40px;background:#fff;padding:40px;border-radius:12px;border:1px solid #e2e8f0;">
+                    <i class="fa fa-filter fa-2x" style="margin-bottom:12px;color:#94a3b8;"></i>
+                    <p style="margin:0;font-size:14px;">No designs match the current filter/search criteria.</p>
+                </div>`;
+        }
+        return;
+    }
+
+    let html = `<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(320px, 1fr));gap:18px;">`;
+
+    filtered.forEach(item => {
+        const isOut = item.isOutOfStock;
+        const badgeColor = isOut ? '#ef4444' : '#d97706';
+        const badgeBg = isOut ? '#fef2f2' : '#fef3c7';
+        const badgeText = isOut ? 'OUT OF STOCK' : 'LOW STOCK';
+        const borderColor = isOut ? '#ef4444' : '#d97706';
+
+        html += `
+            <div style="background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);overflow:hidden;border:1px solid #e2e8f0;border-left:5px solid ${borderColor};display:flex;flex-direction:column;transition:transform 0.15s, box-shadow 0.15s;">
+                <div style="padding:16px;display:flex;gap:14px;align-items:center;flex:1;">
+                    <div style="width:72px;height:72px;background:#f1f5f9;border-radius:8px;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;border:1px solid #e2e8f0;">
+                        ${item.imgSrc ? `<img src="${item.imgSrc}" style="width:100%;height:100%;object-fit:cover;" />` : '<i class="fa fa-tshirt" style="font-size:24px;color:#cbd5e1;"></i>'}
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px;">
+                            <h4 style="margin:0;font-size:16px;font-weight:700;color:#1e293b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${item.name}</h4>
+                            <span style="background:${badgeBg};color:${badgeColor};padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:0.5px;white-space:nowrap;">${badgeText}</span>
+                        </div>
+                        ${item.size ? `<div style="font-size:12px;color:#64748b;margin-bottom:2px;">Size: <strong style="color:#334155;">${item.size}</strong></div>` : ''}
+                        ${item.price ? `<div style="font-size:12px;color:#64748b;margin-bottom:4px;">Rate: <strong style="color:#334155;">₹${item.price}</strong></div>` : ''}
+                        ${item.minStock !== null ? `<div style="font-size:12px;color:#b45309;font-weight:600;"><i class="fa fa-bell" style="font-size:10px;margin-right:4px;"></i>Min Limit: ${item.minStock} pcs</div>` : '<div style="font-size:12px;color:#94a3b8;font-style:italic;">Min Limit not set</div>'}
+                    </div>
+                </div>
+
+                <div style="background:#f8fafc;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid #f1f5f9;text-align:center;">
+                    <div>
+                        <div style="font-size:10px;color:#64748b;text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">Current Stock</div>
+                        <div style="font-size:18px;font-weight:800;color:${item.currentStock <= 0 ? '#ef4444' : '#d97706'};">${item.currentStock}</div>
+                    </div>
+                    <div style="border-left:1px solid #e2e8f0;padding-left:12px;padding-right:12px;">
+                        <div style="font-size:10px;color:#64748b;text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">Min Required</div>
+                        <div style="font-size:18px;font-weight:800;color:#334155;">${item.minStock !== null ? item.minStock : '–'}</div>
+                    </div>
+                    <div style="background:${borderColor};color:#fff;padding:6px 12px;border-radius:8px;min-width:70px;text-align:center;">
+                        <div style="font-size:9px;text-transform:uppercase;font-weight:700;letter-spacing:0.5px;opacity:0.9;">Needed</div>
+                        <div style="font-size:16px;font-weight:800;">${item.deficit > 0 ? '+' + item.deficit : '0'}</div>
+                    </div>
+                </div>
+
+                <div style="padding:8px 16px;background:#fff;border-top:1px solid #f1f5f9;display:flex;gap:8px;">
+                    <button onclick="openLiveStockDetail('${item.name.replace(/'/g, "\\'")}')" style="flex:1;background:#f1f5f9;color:#334155;border:1px solid #e2e8f0;border-radius:6px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+                        <i class="fa fa-boxes"></i> Ledger
+                    </button>
+                    <button onclick="openEditDesignModal(${item.id})" style="flex:1;background:#fef3c7;color:#b45309;border:1px solid #fde68a;border-radius:6px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+                        <i class="fa fa-edit"></i> Edit Min
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+
+    html += `</div>`;
+    resultsArea.innerHTML = html;
+}
+
+function exportMinLowStockExcel() {
+    const items = window._minLowStockItems || [];
+    if (items.length === 0) {
+        showToast('No low stock data to export!');
+        return;
+    }
+
+    let csvContent = "Design Name,Size,Rate,Current Stock,Minimum Stock Limit,Deficit / Needed,Status\n";
+    items.forEach(itm => {
+        const name = (itm.name || '').replace(/"/g, '""');
+        const size = (itm.size || '-').replace(/"/g, '""');
+        const price = itm.price || '-';
+        const curStock = itm.currentStock;
+        const minStk = itm.minStock !== null ? itm.minStock : '-';
+        const deficit = itm.deficit;
+        const status = itm.isOutOfStock ? 'OUT OF STOCK' : 'LOW STOCK';
+
+        csvContent += `"${name}","${size}","${price}","${curStock}","${minStk}","${deficit}","${status}"\n`;
+    });
+
+    const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Low_Stock_Report_${new Date().getTime()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
 }
 
 
