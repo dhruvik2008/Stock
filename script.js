@@ -80,11 +80,11 @@ function debounce(fn, wait = 250) {
     };
 }
 
-const debouncedRenderDesignsTable = debounce(() => renderDesignsTable(), 250);
+const debouncedRenderDesignsTable = debounce(() => renderDesignsTable(false), 250);
 const debouncedRenderChallanList = debounce(() => renderChallanList(), 250);
 const debouncedRenderPackList = debounce(() => renderPackList(), 250);
 const debouncedRenderSRList = debounce(() => renderSRList(), 250);
-const debouncedRenderLiveStock = debounce(() => renderLiveStock(), 250);
+const debouncedRenderLiveStock = debounce(() => renderLiveStock(false), 250);
 const debouncedFilterMinLowStockCards = debounce(() => filterMinLowStockCards(), 200);
 
 // ── SMART IN-MEMORY CACHE FOR FAST STOCK CALCULATION ──
@@ -984,11 +984,14 @@ async function saveDesign() {
 }
 
 // ── CARD GRID RENDER ──────────────────────────
-function renderDesignsTable() {
+function renderDesignsTable(preserveScroll = true) {
     const grid = document.getElementById('designsGrid');
     const empty = document.getElementById('designsEmpty');
     const searchInput = document.getElementById('designsSearchInput');
     const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
+    const mainContent = document.getElementById('mainContent') || document.querySelector('.main-content');
+    const savedScrollTop = (preserveScroll && mainContent) ? mainContent.scrollTop : 0;
 
     if (designs.length === 0 && !query) {
         grid.innerHTML = '';
@@ -1014,10 +1017,17 @@ function renderDesignsTable() {
     // Hide the empty placeholder
     empty.style.display = 'none';
 
+    // Lock minHeight during card swap so the container height doesn't collapse to 0
+    // which would cause mainContent.scrollTop to reset to 0!
+    if (grid.offsetHeight > 0) {
+        grid.style.minHeight = grid.offsetHeight + 'px';
+    }
+
     // Remove old cards first
     grid.querySelectorAll('.design-card').forEach(c => c.remove());
 
     if (filteredDesigns.length === 0) {
+        grid.style.minHeight = '';
         const noResults = document.createElement('div');
         noResults.className = 'design-card';
         noResults.style.gridColumn = '1 / -1';
@@ -1073,6 +1083,11 @@ function renderDesignsTable() {
     });
     grid.appendChild(fragment);
 
+    // Restore scroll position immediately after initial batch
+    if (preserveScroll && mainContent && savedScrollTop > 0) {
+        mainContent.scrollTop = savedScrollTop;
+    }
+
     // Render remaining cards asynchronously in next animation frame to prevent freeze
     if (filteredDesigns.length > 48) {
         requestAnimationFrame(() => {
@@ -1081,7 +1096,13 @@ function renderDesignsTable() {
                 restFragment.appendChild(createDesignCard(filteredDesigns[i]));
             }
             grid.appendChild(restFragment);
+            grid.style.minHeight = '';
+            if (preserveScroll && mainContent && savedScrollTop > 0) {
+                mainContent.scrollTop = savedScrollTop;
+            }
         });
+    } else {
+        grid.style.minHeight = '';
     }
 }
 
@@ -4519,9 +4540,11 @@ function changeReturnTab(tab) {
 // ═════════════════════ LIVE STOCK SECTION ═════════════════════
 let isLiveStockSetWise = false;
 
-function renderLiveStock() {
+function renderLiveStock(preserveScroll = true) {
     const listEl = document.getElementById('liveStockList');
     if (!listEl) return;
+    const mainContent = document.getElementById('mainContent') || document.querySelector('.main-content');
+    const savedScrollTop = (preserveScroll && mainContent) ? mainContent.scrollTop : 0;
 
     let allDesigns = designs.filter(d => !d.deleted);
     let overallStockTotal = 0;
@@ -4577,6 +4600,9 @@ function renderLiveStock() {
 
     listEl.innerHTML = html;
     document.getElementById('overallStockTotal').textContent = overallStockTotal;
+    if (preserveScroll && mainContent && savedScrollTop > 0) {
+        mainContent.scrollTop = savedScrollTop;
+    }
 }
 
 // ── Live Stock Button Actions ──
