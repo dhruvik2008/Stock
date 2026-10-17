@@ -43,6 +43,30 @@ let fbConnected = false;
 let _suppressFirebaseWrite = false; // prevent write loops
 let _syncDebounceTimers = {};
 let _lastLocalJSON = {}; // Cache to avoid redundant stringify/parse
+let _lastCloudJSON = {}; // Cache raw cloud data to prevent redundant merging & re-renders
+
+// ── Check if two design arrays have identical data ──
+function areDesignListsEqual(listA, listB) {
+    if (!listA || !listB) return listA === listB;
+    if (listA.length !== listB.length) return false;
+    const mapA = new Map();
+    for (let i = 0; i < listA.length; i++) {
+        const it = listA[i];
+        if (it && it.id != null) mapA.set(it.id, it);
+    }
+    for (let i = 0; i < listB.length; i++) {
+        const b = listB[i];
+        if (!b || b.id == null) return false;
+        const a = mapA.get(b.id);
+        if (!a) return false;
+        if ((a.updatedAt || 0) !== (b.updatedAt || 0)) return false;
+        if (a.name !== b.name || a.price !== b.price || a.deleted !== b.deleted || a.imgSrc !== b.imgSrc || a.size !== b.size || a.hsn !== b.hsn || a.desc !== b.desc) return false;
+        const catA = (a.categories || []).join(',');
+        const catB = (b.categories || []).join(',');
+        if (catA !== catB) return false;
+    }
+    return true;
+}
 
 // ── Status UI ────────────────────────────────────
 function updateSyncStatus(status) {
@@ -174,14 +198,15 @@ async function pullAndMergeDesigns() {
         }
         if (!Array.isArray(fbData) && typeof fbData === 'object') fbData = Object.values(fbData);
 
+        const fbDataStr = JSON.stringify(fbData);
+        _lastCloudJSON['vastra_designs'] = fbDataStr;
+
         const localDesigns = await VastraDB.getAll();
         const merged = smartMerge(localDesigns, fbData);
         // Sort merged designs numerically
         merged.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true, sensitivity: 'base' }));
-        const mergedJSON = JSON.stringify(merged);
-        _lastLocalJSON['vastra_designs'] = mergedJSON;
 
-        if (mergedJSON !== JSON.stringify(localDesigns)) {
+        if (!areDesignListsEqual(localDesigns, merged)) {
             _suppressFirebaseWrite = true;
             await VastraDB.saveAll(merged);
             _suppressFirebaseWrite = false;
@@ -239,20 +264,16 @@ function startFirebaseListeners() {
 
         try {
             const fbDataStr = JSON.stringify(fbData);
-            // Optimization: If the string matches our last known local state, skip IndexedDB check
-            if (fbDataStr === _lastLocalJSON['vastra_designs']) return;
+            // Optimization: If the cloud data string hasn't changed, skip completely
+            if (fbDataStr === _lastCloudJSON['vastra_designs']) return;
+            _lastCloudJSON['vastra_designs'] = fbDataStr;
 
             const localDesigns = await VastraDB.getAll();
-            const localDataStr = JSON.stringify(localDesigns);
-
-            // Authoritative Mirroring for Designs (IndexedDB)
-            // FIXED: Using smartMerge for designs too to prevent auto-delete
             const merged = smartMerge(localDesigns, fbData);
-            const mergedStr = JSON.stringify(merged);
+            merged.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true, sensitivity: 'base' }));
 
-            if (mergedStr !== localDataStr) {
+            if (!areDesignListsEqual(localDesigns, merged)) {
                 _suppressFirebaseWrite = true;
-                _lastLocalJSON['vastra_designs'] = mergedStr;
                 await VastraDB.saveAll(merged);
                 _suppressFirebaseWrite = false;
                 console.log(`✨ Automatic Sync (Merge): vastra_designs`);
@@ -371,25 +392,22 @@ function startDeepSyncPoller() {
                 const cloudData = cloudBatch[key];
                 if (cloudData) {
                     const cloudJSON = JSON.stringify(cloudData);
-                    // Consistency check: Only merge if Cloud differs from what we last thought was local
-                    if (cloudJSON !== _lastLocalJSON[key]) {
-                        const localData = JSON.parse(localStorage.getItem(key) || (key.includes('supplier') ? '{}' : '[]'));
-                        const merged = smartMerge(localData, cloudData);
-                        const mergedJSON = JSON.stringify(merged);
-                        
-                        if (mergedJSON !== JSON.stringify(localData)) {
-                            _suppressFirebaseWrite = true;
-                            localStorage.setItem(key, mergedJSON);
-                            _suppressFirebaseWrite = false;
-                            _lastLocalJSON[key] = mergedJSON;
-                            console.log(`⬇️ Batch update applied for ${key}`);
-                            if (typeof refreshUIForKey === 'function') refreshUIForKey(key);
+                    if (cloudJSON === _lastCloudJSON[key]) return;
+                    _lastCloudJSON[key] = cloudJSON;
 
-                            // If we have local additions not in cloud, they will be pushed via listeners/transactions
-                        } else {
-                            // Local and Cloud are effectively same, update cache
-                            _lastLocalJSON[key] = mergedJSON;
-                        }
+                    const localData = JSON.parse(localStorage.getItem(key) || (key.includes('supplier') ? '{}' : '[]'));
+                    const merged = smartMerge(localData, cloudData);
+                    const mergedJSON = JSON.stringify(merged);
+                    
+                    if (mergedJSON !== JSON.stringify(localData)) {
+                        _suppressFirebaseWrite = true;
+                        localStorage.setItem(key, mergedJSON);
+                        _suppressFirebaseWrite = false;
+                        _lastLocalJSON[key] = mergedJSON;
+                        console.log(`⬇️ Batch update applied for ${key}`);
+                        if (typeof refreshUIForKey === 'function') refreshUIForKey(key);
+                    } else {
+                        _lastLocalJSON[key] = mergedJSON;
                     }
                 }
             });
@@ -401,22 +419,19 @@ function startDeepSyncPoller() {
                 if (!Array.isArray(fbData) && typeof fbData === 'object') fbData = Object.values(fbData);
                 const fbDataStr = JSON.stringify(fbData);
                 
-                if (fbDataStr !== _lastLocalJSON['vastra_designs']) {
+                if (fbDataStr !== _lastCloudJSON['vastra_designs']) {
+                    _lastCloudJSON['vastra_designs'] = fbDataStr;
                     const localDesigns = await VastraDB.getAll();
                     const merged = smartMerge(localDesigns, fbData);
                     // Sort numerically
                     merged.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true, sensitivity: 'base' }));
-                    const mergedStr = JSON.stringify(merged);
                     
-                    if (mergedStr !== JSON.stringify(localDesigns)) {
+                    if (!areDesignListsEqual(localDesigns, merged)) {
                         _suppressFirebaseWrite = true;
-                        _lastLocalJSON['vastra_designs'] = mergedStr;
                         await VastraDB.saveAll(merged);
                         _suppressFirebaseWrite = false;
                         console.log(`⬇️ Batch update applied for vastra_designs`);
                         if (typeof refreshUIForKey === 'function') refreshUIForKey('vastra_designs');
-                    } else {
-                        _lastLocalJSON['vastra_designs'] = mergedStr;
                     }
                 }
             }
@@ -441,8 +456,19 @@ function refreshUIForKey(key) {
                 if (typeof VastraDB !== 'undefined') {
                     VastraDB.getAll().then(res => {
                         // Sort designs numerically
-                        designs = res.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true, sensitivity: 'base' }));
-                        if (isSectionVisible('designsSection') && typeof renderDesignsTable === 'function') renderDesignsTable();
+                        const newDesigns = res.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true, sensitivity: 'base' }));
+                        
+                        // Check if in-memory list changed
+                        if (typeof areDesignListsEqual === 'function' && areDesignListsEqual(designs, newDesigns)) {
+                            return; // Data has not changed, do not touch DOM or reset scroll!
+                        }
+                        designs = newDesigns;
+                        
+                        // Only re-render table if section is visible and modal is NOT open
+                        const modalOpen = document.getElementById('addDesignModal')?.style.display === 'flex';
+                        if (isSectionVisible('designsSection') && typeof renderDesignsTable === 'function' && !modalOpen) {
+                            renderDesignsTable(true); // Preserve scroll position
+                        }
                         if (typeof updateStats === 'function') updateStats();
                     });
                 }
@@ -457,15 +483,15 @@ function refreshUIForKey(key) {
                     const fresh = challans.find(c => c.id === currentDetailChallan.id);
                     if (fresh) renderChallanDetail(fresh);
                 }
-                // Refresh stock views only if currently visible
-                if (isSectionVisible('liveStockSection') && typeof renderLiveStock === 'function') renderLiveStock();
+                // Refresh stock views only if currently visible, preserving scroll
+                if (isSectionVisible('liveStockSection') && typeof renderLiveStock === 'function') renderLiveStock(true);
                 if (isSectionVisible('lowStockSection') && typeof renderLowStockAlert === 'function') renderLowStockAlert();
                 if (isSectionVisible('minLowStockSection') && typeof renderMinLowStock === 'function') renderMinLowStock();
                 break;
             case 'vastra_packs':
                 if (typeof invalidateStockCache === 'function') invalidateStockCache();
                 if (isSectionVisible('packSection') && typeof renderPackList === 'function') renderPackList();
-                if (isSectionVisible('liveStockSection') && typeof renderLiveStock === 'function') renderLiveStock();
+                if (isSectionVisible('liveStockSection') && typeof renderLiveStock === 'function') renderLiveStock(true);
                 if (isSectionVisible('lowStockSection') && typeof renderLowStockAlert === 'function') renderLowStockAlert();
                 if (isSectionVisible('minLowStockSection') && typeof renderMinLowStock === 'function') renderMinLowStock();
                 break;
